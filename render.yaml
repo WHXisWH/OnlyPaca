@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: onlyfhe-relayer
+    runtime: node
+    rootDir: relayer
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: NETWORK
+        value: arb-sepolia
+      - key: ARBITRUM_SEPOLIA_RPC_URL
+        sync: false
+      - key: RELAYER_PRIVATE_KEY
+        sync: false
+      - key: SUBSCRIPTION_CONTRACT
+        value: 0x2451c1c2D71eBec5f63e935670c4bb0Ce19381f5
+      - key: RELAYER_CONTRACT
+        value: 0xbd546CD2fc7A9F614c51fcE7AfE60464D39f9cC0
+      - key: FRONTEND_URL
+        sync: false

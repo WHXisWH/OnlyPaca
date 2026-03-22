@@ -1,0 +1,11 @@
+{
+  "network": "arb-sepolia",
+  "chainId": "421614",
+  "contracts": {
+    "subscription": "0x2451c1c2D71eBec5f63e935670c4bb0Ce19381f5",
+    "relayer": "0xbd546CD2fc7A9F614c51fcE7AfE60464D39f9cC0"
+  },
+  "deployer": "0x71BB0f1EBa26c41Ef6703ec30A249Bb0F293d6c8",
+  "deployedAt": "2026-03-19T15:01:28.171Z",
+  "blockNumber": 251629503
+}

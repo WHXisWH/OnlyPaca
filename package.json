@@ -1,0 +1,32 @@
+{
+  "name": "onlyfhe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first creator subscription platform powered by Fhenix CoFHE",
+  "workspaces": [
+    "contracts",
+    "frontend",
+    "relayer",
+    "shared"
+  ],
+  "scripts": {
+    "contracts:compile": "pnpm --filter contracts compile",
+    "contracts:test": "pnpm --filter contracts test",
+    "contracts:deploy": "pnpm --filter contracts deploy",
+    "frontend:dev": "pnpm --filter frontend dev",
+    "frontend:build": "pnpm --filter frontend build",
+    "relayer:dev": "pnpm --filter relayer dev",
+    "relayer:build": "pnpm --filter relayer build",
+    "dev": "concurrently \"pnpm frontend:dev\" \"pnpm relayer:dev\"",
+    "clean": "rm -rf node_modules && pnpm --filter '*' exec rm -rf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
