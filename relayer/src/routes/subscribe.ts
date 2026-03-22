@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { Router, Request, Response, IRouter } from "express";
 import { z } from "zod";
 import { relaySubscription, getNonce } from "../services/subscription.js";
 
-export const subscribeRouter = Router();
+export const subscribeRouter: IRouter = Router();
 
 // Request validation schema
 const subscribeSchema = z.object({
@@ -14,7 +14,7 @@ const subscribeSchema = z.object({
 });
 
 // POST /api/subscribe - Relay a subscription transaction
-subscribeRouter.post("/", async (req, res) => {
+subscribeRouter.post("/", async (req: Request, res: Response) => {
   try {
     const validation = subscribeSchema.safeParse(req.body);
 
@@ -54,7 +54,7 @@ subscribeRouter.post("/", async (req, res) => {
 });
 
 // GET /api/subscribe/nonce/:address - Get current nonce for a user
-subscribeRouter.get("/nonce/:address", async (req, res) => {
+subscribeRouter.get("/nonce/:address", async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
 

@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { Router, Request, Response, IRouter } from "express";
 import { getCreatorProfile, getRegisteredCreators } from "../services/creators.js";
 
-export const creatorsRouter = Router();
+export const creatorsRouter: IRouter = Router();
 
 // GET /api/creators - List all registered creators
-creatorsRouter.get("/", async (req, res) => {
+creatorsRouter.get("/", async (req: Request, res: Response) => {
   try {
     const creators = await getRegisteredCreators();
     res.json({ creators });
@@ -15,7 +15,7 @@ creatorsRouter.get("/", async (req, res) => {
 });
 
 // GET /api/creators/:address - Get specific creator profile
-creatorsRouter.get("/:address", async (req, res) => {
+creatorsRouter.get("/:address", async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
 

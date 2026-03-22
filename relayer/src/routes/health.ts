@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { Router, Request, Response, IRouter } from "express";
 import { ethers } from "ethers";
 import { getProvider, getRelayerWallet } from "../services/blockchain.js";
 
-export const healthRouter = Router();
+export const healthRouter: IRouter = Router();
 
-healthRouter.get("/", async (req, res) => {
+healthRouter.get("/", async (req: Request, res: Response) => {
   try {
     const provider = getProvider();
     const wallet = getRelayerWallet();

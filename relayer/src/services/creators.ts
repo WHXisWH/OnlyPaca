@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers, EventLog } from "ethers";
 import { getProvider, getContractAddresses } from "./blockchain.js";
 
 // Minimal ABI for reading creator data
@@ -67,7 +67,11 @@ export async function getRegisteredCreators(): Promise<CreatorProfile[]> {
   const events = await contract.queryFilter(filter, -10000); // Last 10000 blocks
 
   // Get unique creator addresses
-  const creatorAddresses = [...new Set(events.map((e) => e.args?.[0]))];
+  const creatorAddresses = [...new Set(
+    events
+      .filter((e): e is EventLog => e instanceof EventLog)
+      .map((e) => e.args[0])
+  )];
 
   // Fetch current profile for each creator
   const profiles = await Promise.all(
