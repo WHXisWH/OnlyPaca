@@ -95,30 +95,54 @@ export default function ExplorePage() {
 
           {/* Empty State */}
           {!isLoading && !error && filteredCreators.length === 0 && (
-            <div className="text-center py-20">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-dark-800 flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-dark-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">
-                No creators found
-              </h3>
-              <p className="text-dark-400">
-                {searchQuery
-                  ? "Try a different search term"
-                  : "Be the first to register as a creator!"}
-              </p>
+            <div className="py-20">
+              {searchQuery ? (
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-white mb-2">No results for &quot;{searchQuery}&quot;</h3>
+                  <p className="text-dark-400">Try a different search term.</p>
+                </div>
+              ) : (
+                <div className="max-w-2xl mx-auto text-center">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary-500/10 border border-primary-500/30 flex items-center justify-center">
+                    <svg className="w-10 h-10 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">No creators yet — be the first</h3>
+                  <p className="text-dark-400 mb-8 max-w-md mx-auto">
+                    OnlyPaca is live on Arbitrum Sepolia. Register as a creator, set your price, and start earning with fully encrypted revenue.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a
+                      href="/dashboard/creator"
+                      className="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-500 rounded-xl font-semibold text-white glow-hover transition-all hover:scale-105"
+                    >
+                      Become a Creator
+                    </a>
+                    <a
+                      href="/dashboard"
+                      className="px-8 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-all"
+                    >
+                      Go to Dashboard
+                    </a>
+                  </div>
+
+                  {/* How it works mini */}
+                  <div className="mt-12 grid sm:grid-cols-3 gap-6 text-left">
+                    {[
+                      { n: "01", title: "Register", desc: "Set your name, price, and a content URL. One transaction on Arbitrum Sepolia." },
+                      { n: "02", title: "Subscribers pay privately", desc: "Fans sign a message — no gas. The relayer pays gas on their behalf." },
+                      { n: "03", title: "Withdraw encrypted revenue", desc: "Your earnings accumulate encrypted via FHE. Only you can decrypt and withdraw." },
+                    ].map((item) => (
+                      <div key={item.n} className="glass rounded-xl p-4">
+                        <div className="text-primary-400 font-bold text-sm mb-2">{item.n}</div>
+                        <div className="text-white font-semibold mb-1">{item.title}</div>
+                        <div className="text-dark-400 text-sm">{item.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

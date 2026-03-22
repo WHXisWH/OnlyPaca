@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useReadContract } from "wagmi";
+import { useAccount, useWriteContract, useReadContract, usePublicClient } from "wagmi";
 import { SUBSCRIPTION_ABI } from "@/config/contracts";
 import { CONTRACT_ADDRESSES } from "@/config/wagmi";
 import { Creator } from "@/types";
@@ -9,6 +9,7 @@ import { Creator } from "@/types";
 interface RegisterParams {
   name: string;
   bio: string;
+  contentURL: string;
   subscriptionPrice: bigint;
   payoutAddress: `0x${string}`;
 }
@@ -16,16 +17,17 @@ interface RegisterParams {
 export function useCreatorDashboard() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const [profile, setProfile] = useState<Creator | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRegistered, setIsRegistered] = useState(false);
   const [revenue, setRevenue] = useState<bigint | null>(null);
   const [isDecryptingRevenue, setIsDecryptingRevenue] = useState(false);
+  const [revenueDecryptStep, setRevenueDecryptStep] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-  // Read creator profile from contract
   const { data: creatorData, refetch: refetchProfile } = useReadContract({
     address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
     abi: SUBSCRIPTION_ABI,
@@ -36,7 +38,6 @@ export function useCreatorDashboard() {
     },
   });
 
-  // Update profile state when data changes
   useEffect(() => {
     setIsLoading(true);
 
@@ -45,17 +46,20 @@ export function useCreatorDashboard() {
         creatorData as [boolean, bigint, bigint, bigint, `0x${string}`, string];
 
       if (registered) {
-        // Parse content URI to get name and bio
         let name = "Creator";
         let bio = "";
+        let contentURL = "";
 
         try {
-          // In production, this would fetch from IPFS
-          // For now, we'll use placeholder data
-          const uriParts = contentURI.split("/");
-          name = uriParts[uriParts.length - 1] || "Creator";
-        } catch (e) {
-          // Ignore parsing errors
+          const meta = JSON.parse(contentURI);
+          if (meta.name) name = meta.name;
+          if (meta.bio) bio = meta.bio;
+          if (meta.contentURL) contentURL = meta.contentURL;
+        } catch {
+          if (contentURI && !contentURI.startsWith("{")) {
+            const parts = contentURI.split("/");
+            name = decodeURIComponent(parts[parts.length - 1] || "Creator");
+          }
         }
 
         setProfile({
@@ -67,6 +71,7 @@ export function useCreatorDashboard() {
           subscriptionDuration: subscriptionDuration.toString(),
           payoutAddress,
           contentURI,
+          contentURL,
         });
         setIsRegistered(true);
       } else {
@@ -81,7 +86,6 @@ export function useCreatorDashboard() {
     setIsLoading(false);
   }, [creatorData, address]);
 
-  // Register as creator
   const registerCreator = useCallback(
     async (params: RegisterParams) => {
       if (!address) return;
@@ -89,8 +93,12 @@ export function useCreatorDashboard() {
       setIsRegistering(true);
 
       try {
-        // Create content URI (in production, upload to IPFS)
-        const contentURI = `ipfs://${params.name}`;
+        // Store metadata as JSON in contentURI
+        const contentURI = JSON.stringify({
+          name: params.name,
+          bio: params.bio,
+          contentURL: params.contentURL,
+        });
 
         await writeContractAsync({
           address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
@@ -98,13 +106,12 @@ export function useCreatorDashboard() {
           functionName: "registerCreator",
           args: [
             params.subscriptionPrice,
-            BigInt(30 * 24 * 60 * 60), // 30 days duration
+            BigInt(30 * 24 * 60 * 60), // 30 days
             params.payoutAddress,
             contentURI,
           ],
         });
 
-        // Refetch profile after registration
         await refetchProfile();
       } catch (error) {
         console.error("Registration failed:", error);
@@ -116,17 +123,50 @@ export function useCreatorDashboard() {
     [address, writeContractAsync, refetchProfile]
   );
 
-  // Request revenue decryption
+  const updateProfile = useCallback(
+    async (params: RegisterParams) => {
+      if (!address) return;
+
+      setIsRegistering(true);
+
+      try {
+        const contentURI = JSON.stringify({
+          name: params.name,
+          bio: params.bio,
+          contentURL: params.contentURL,
+        });
+
+        await writeContractAsync({
+          address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
+          abi: SUBSCRIPTION_ABI,
+          functionName: "updateCreatorProfile",
+          args: [
+            params.subscriptionPrice,
+            BigInt(30 * 24 * 60 * 60),
+            params.payoutAddress,
+            contentURI,
+          ],
+        });
+
+        await refetchProfile();
+      } catch (error) {
+        console.error("Profile update failed:", error);
+        throw error;
+      } finally {
+        setIsRegistering(false);
+      }
+    },
+    [address, writeContractAsync, refetchProfile]
+  );
+
+  // Request revenue decryption with real FHE polling
   const requestRevenueDecrypt = useCallback(async () => {
-    if (!address) return;
+    if (!address || !publicClient) return;
 
     setIsDecryptingRevenue(true);
+    setRevenueDecryptStep("Sending transaction...");
 
     try {
-      // In production, this calls requestRevenueDecrypt() on the contract
-      // Then polls getRevenue() until decryption is ready
-      // For now, simulate with mock data
-
       await writeContractAsync({
         address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
         abi: SUBSCRIPTION_ABI,
@@ -134,23 +174,48 @@ export function useCreatorDashboard() {
         args: [],
       });
 
-      // Poll for decryption result
-      // In production, this would check isRevenueDecryptReady()
-      // For demo, set mock value after delay
-      setTimeout(() => {
-        setRevenue(BigInt(0)); // Mock: 0 ETH
-        setIsDecryptingRevenue(false);
-      }, 2000);
+      setRevenueDecryptStep("Waiting for FHE decryption (~5–30s)...");
+
+      // Poll isRevenueDecryptReady() up to 60 seconds
+      let attempts = 0;
+      const maxAttempts = 15;
+
+      while (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 4000));
+
+        try {
+          const result = await publicClient.readContract({
+            address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
+            abi: SUBSCRIPTION_ABI,
+            functionName: "isRevenueDecryptReady",
+            args: [],
+            account: address,
+          });
+
+          const [ready, value] = result as [boolean, bigint];
+
+          if (ready) {
+            setRevenue(value);
+            setRevenueDecryptStep(null);
+            return;
+          }
+        } catch {
+          // poll failure — keep trying
+        }
+
+        attempts++;
+      }
+
+      setRevenueDecryptStep("Timed out. Please try again.");
+      setTimeout(() => setRevenueDecryptStep(null), 3000);
     } catch (error) {
       console.error("Revenue decryption failed:", error);
+      setRevenueDecryptStep(null);
+    } finally {
       setIsDecryptingRevenue(false);
-
-      // For demo without contract, show mock value
-      setRevenue(BigInt(0));
     }
-  }, [address, writeContractAsync]);
+  }, [address, publicClient, writeContractAsync]);
 
-  // Withdraw revenue
   const withdrawRevenue = useCallback(async () => {
     if (!address || revenue === null || revenue === BigInt(0)) return;
 
@@ -164,7 +229,6 @@ export function useCreatorDashboard() {
         args: [],
       });
 
-      // Reset revenue after withdrawal
       setRevenue(BigInt(0));
     } catch (error) {
       console.error("Withdrawal failed:", error);
@@ -180,9 +244,11 @@ export function useCreatorDashboard() {
     isRegistered,
     revenue,
     isDecryptingRevenue,
+    revenueDecryptStep,
     registerCreator,
-    requestRevenueDecrypt,
+    updateProfile,
     withdrawRevenue,
+    requestRevenueDecrypt,
     isRegistering,
     isWithdrawing,
     refetchProfile,

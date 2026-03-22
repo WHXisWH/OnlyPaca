@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract, usePublicClient } from "wagmi";
 import { SUBSCRIPTION_ABI } from "@/config/contracts";
 import { CONTRACT_ADDRESSES } from "@/config/wagmi";
 import { SubscriptionStatus } from "@/types";
+import { parseCreatorData } from "./useCreators";
+import { API_ENDPOINTS } from "@/config/wagmi";
 
 interface Subscription {
   creatorAddress: string;
@@ -14,31 +16,51 @@ interface Subscription {
   subscribedAt?: string;
 }
 
-// Mock subscriptions for demo
-const MOCK_SUBSCRIPTIONS: Subscription[] = [
-  {
-    creatorAddress: "0x1234567890123456789012345678901234567890",
-    creatorName: "CryptoArtist",
-    status: null,
-    subscribedAt: "2024-03-15T10:00:00Z",
-  },
-  {
-    creatorAddress: "0x3456789012345678901234567890123456789012",
-    creatorName: "DeFiAnalyst",
-    status: null,
-    subscribedAt: "2024-03-10T14:30:00Z",
-  },
-];
+// ---- localStorage helpers ----
+
+function getStoredCreatorAddresses(userAddress: string): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(`onlypaca_subs_${userAddress.toLowerCase()}`) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function getStoredSubTime(userAddress: string, creatorAddress: string): string | undefined {
+  try {
+    return localStorage.getItem(`onlypaca_subtime_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getStoredVerifiedStatus(userAddress: string, creatorAddress: string): SubscriptionStatus | null {
+  try {
+    const val = localStorage.getItem(`onlypaca_verified_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`);
+    return val !== null ? (parseInt(val) as SubscriptionStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredVerifiedStatus(userAddress: string, creatorAddress: string, status: SubscriptionStatus) {
+  try {
+    localStorage.setItem(`onlypaca_verified_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`, status.toString());
+  } catch {}
+}
+
+// ---- hook ----
 
 export function useSubscriptions() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState<string | null>(null);
+  const [verifyStep, setVerifyStep] = useState<string | null>(null);
 
-  // Load subscriptions
   useEffect(() => {
     async function loadSubscriptions() {
       if (!address) {
@@ -50,13 +72,37 @@ export function useSubscriptions() {
       setIsLoading(true);
 
       try {
-        // In production, this would:
-        // 1. Query SubscriptionActivated events for this subscriber
-        // 2. Build list of creators they've subscribed to
-        // 3. For each, call verifyAccess to check current status
+        const creatorAddresses = getStoredCreatorAddresses(address);
 
-        // For demo, use mock data
-        setSubscriptions(MOCK_SUBSCRIPTIONS);
+        if (creatorAddresses.length === 0) {
+          setSubscriptions([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const subs: Subscription[] = await Promise.all(
+          creatorAddresses.map(async (creatorAddr) => {
+            let creatorName = creatorAddr.slice(0, 6) + "..." + creatorAddr.slice(-4);
+
+            try {
+              const res = await fetch(`${API_ENDPOINTS.relayer}/api/creators/${creatorAddr}`);
+              if (res.ok) {
+                const data = await res.json();
+                const parsed = parseCreatorData(data.creator);
+                creatorName = parsed.name;
+              }
+            } catch { /* use fallback name */ }
+
+            return {
+              creatorAddress: creatorAddr,
+              creatorName,
+              status: getStoredVerifiedStatus(address, creatorAddr),
+              subscribedAt: getStoredSubTime(address, creatorAddr),
+            };
+          })
+        );
+
+        setSubscriptions(subs);
       } catch (error) {
         console.error("Failed to load subscriptions:", error);
         setSubscriptions([]);
@@ -68,15 +114,14 @@ export function useSubscriptions() {
     loadSubscriptions();
   }, [address]);
 
-  // Verify access to a creator
   const verifyAccess = useCallback(
     async (creatorAddress: string) => {
-      if (!address) return;
+      if (!address || !publicClient) return;
 
       setIsVerifying(creatorAddress);
+      setVerifyStep("Sending transaction...");
 
       try {
-        // Step 1: Request decryption
         await writeContractAsync({
           address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
           abi: SUBSCRIPTION_ABI,
@@ -84,41 +129,53 @@ export function useSubscriptions() {
           args: [creatorAddress as `0x${string}`],
         });
 
-        // Step 2: Poll for result (in production)
-        // For demo, simulate with timeout
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        setVerifyStep("Waiting for FHE decryption (~5–30s)...");
 
-        // Step 3: Get decrypted status
-        // In production: call verifyAccess() view function
-        // For demo: randomly set active or not subscribed
-        const mockStatus =
-          Math.random() > 0.3
-            ? SubscriptionStatus.ACTIVE
-            : SubscriptionStatus.NOT_SUBSCRIBED;
+        let attempts = 0;
+        const maxAttempts = 15;
 
-        setSubscriptions((prev) =>
-          prev.map((sub) =>
-            sub.creatorAddress === creatorAddress
-              ? { ...sub, status: mockStatus }
-              : sub
-          )
-        );
-      } catch (error) {
+        while (attempts < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 4000));
+
+          try {
+            const result = await publicClient.readContract({
+              address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
+              abi: SUBSCRIPTION_ABI,
+              functionName: "isAccessDecryptReady",
+              args: [creatorAddress as `0x${string}`],
+              account: address,
+            });
+
+            const [ready, status] = result as [boolean, number];
+
+            if (ready) {
+              const subStatus = status as SubscriptionStatus;
+              setStoredVerifiedStatus(address, creatorAddress, subStatus);
+              setSubscriptions((prev) =>
+                prev.map((sub) =>
+                  sub.creatorAddress.toLowerCase() === creatorAddress.toLowerCase()
+                    ? { ...sub, status: subStatus }
+                    : sub
+                )
+              );
+              setVerifyStep(null);
+              return;
+            }
+          } catch { /* keep polling */ }
+
+          attempts++;
+        }
+
+        setVerifyStep("Timed out — please try verifying again.");
+        setTimeout(() => setVerifyStep(null), 3000);
+      } catch (error: any) {
         console.error("Access verification failed:", error);
-
-        // For demo without contract, show mock status
-        setSubscriptions((prev) =>
-          prev.map((sub) =>
-            sub.creatorAddress === creatorAddress
-              ? { ...sub, status: SubscriptionStatus.ACTIVE }
-              : sub
-          )
-        );
+        setVerifyStep(null);
       } finally {
         setIsVerifying(null);
       }
     },
-    [address, writeContractAsync]
+    [address, publicClient, writeContractAsync]
   );
 
   return {
@@ -126,5 +183,6 @@ export function useSubscriptions() {
     isLoading,
     verifyAccess,
     isVerifying,
+    verifyStep,
   };
 }

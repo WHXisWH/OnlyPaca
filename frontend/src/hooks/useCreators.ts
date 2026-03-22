@@ -4,53 +4,44 @@ import { useState, useEffect } from "react";
 import { Creator } from "@/types";
 import { API_ENDPOINTS } from "@/config/wagmi";
 
-// Mock data for development
-const MOCK_CREATORS: Creator[] = [
-  {
-    address: "0x1234567890123456789012345678901234567890",
-    name: "CryptoArtist",
-    bio: "Digital artist exploring the intersection of art and blockchain technology.",
-    avatar: "",
-    subscriberCount: "142",
-    subscriptionPrice: "10000000000000000", // 0.01 ETH
-    subscriptionDuration: "2592000", // 30 days
-    payoutAddress: "0x1234567890123456789012345678901234567890",
-    contentURI: "ipfs://QmExample1",
-  },
-  {
-    address: "0x2345678901234567890123456789012345678901",
-    name: "Web3Developer",
-    bio: "Building the decentralized future, one smart contract at a time.",
-    avatar: "",
-    subscriberCount: "89",
-    subscriptionPrice: "20000000000000000", // 0.02 ETH
-    subscriptionDuration: "2592000",
-    payoutAddress: "0x2345678901234567890123456789012345678901",
-    contentURI: "ipfs://QmExample2",
-  },
-  {
-    address: "0x3456789012345678901234567890123456789012",
-    name: "DeFiAnalyst",
-    bio: "Deep dives into DeFi protocols. Research and alpha for subscribers.",
-    avatar: "",
-    subscriberCount: "256",
-    subscriptionPrice: "50000000000000000", // 0.05 ETH
-    subscriptionDuration: "2592000",
-    payoutAddress: "0x3456789012345678901234567890123456789012",
-    contentURI: "ipfs://QmExample3",
-  },
-  {
-    address: "0x4567890123456789012345678901234567890123",
-    name: "NFTCollector",
-    bio: "Curating the best NFT collections. Early access to drops for subscribers.",
-    avatar: "",
-    subscriberCount: "78",
-    subscriptionPrice: "15000000000000000", // 0.015 ETH
-    subscriptionDuration: "2592000",
-    payoutAddress: "0x4567890123456789012345678901234567890123",
-    contentURI: "ipfs://QmExample4",
-  },
-];
+// Parse a raw creator object from the API into a typed Creator
+export function parseCreatorData(raw: {
+  address: string;
+  subscriberCount: string;
+  subscriptionPrice: string;
+  subscriptionDuration?: string;
+  payoutAddress: string;
+  contentURI: string;
+}): Creator {
+  let name = raw.address.slice(0, 6) + "..." + raw.address.slice(-4);
+  let bio = "";
+  let contentURL = "";
+
+  try {
+    const meta = JSON.parse(raw.contentURI);
+    if (meta.name) name = meta.name;
+    if (meta.bio) bio = meta.bio;
+    if (meta.contentURL) contentURL = meta.contentURL;
+  } catch {
+    // Legacy: contentURI is a plain string, not JSON
+    if (raw.contentURI && !raw.contentURI.startsWith("{")) {
+      const parts = raw.contentURI.split("/");
+      name = decodeURIComponent(parts[parts.length - 1] || name);
+    }
+  }
+
+  return {
+    address: raw.address,
+    name,
+    bio,
+    subscriberCount: raw.subscriberCount,
+    subscriptionPrice: raw.subscriptionPrice,
+    subscriptionDuration: raw.subscriptionDuration || "2592000",
+    payoutAddress: raw.payoutAddress,
+    contentURI: raw.contentURI,
+    contentURL,
+  };
+}
 
 export function useCreators() {
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -63,21 +54,19 @@ export function useCreators() {
         setIsLoading(true);
         setError(null);
 
-        // Try to fetch from relayer API
         const response = await fetch(`${API_ENDPOINTS.relayer}/api/creators`);
 
         if (response.ok) {
           const data = await response.json();
-          setCreators(data.creators || []);
+          const parsed = (data.creators || []).map(parseCreatorData);
+          setCreators(parsed);
         } else {
-          // Fall back to mock data in development
-          console.warn("Relayer API not available, using mock data");
-          setCreators(MOCK_CREATORS);
+          setError("Failed to load creators. Please try again.");
+          setCreators([]);
         }
       } catch (err) {
-        console.warn("Failed to fetch creators, using mock data:", err);
-        // Use mock data if API is unavailable
-        setCreators(MOCK_CREATORS);
+        setError("Could not connect to the API. Please try again later.");
+        setCreators([]);
       } finally {
         setIsLoading(false);
       }
@@ -111,30 +100,14 @@ export function useCreator(address: string) {
 
         if (response.ok) {
           const data = await response.json();
-          setCreator(data.creator);
+          setCreator(parseCreatorData(data.creator));
         } else if (response.status === 404) {
           setError("Creator not found");
         } else {
-          // Fall back to mock data
-          const mock = MOCK_CREATORS.find(
-            (c) => c.address.toLowerCase() === address.toLowerCase()
-          );
-          if (mock) {
-            setCreator(mock);
-          } else {
-            setError("Creator not found");
-          }
+          setError("Failed to load creator");
         }
       } catch (err) {
-        // Try mock data
-        const mock = MOCK_CREATORS.find(
-          (c) => c.address.toLowerCase() === address.toLowerCase()
-        );
-        if (mock) {
-          setCreator(mock);
-        } else {
-          setError("Failed to fetch creator");
-        }
+        setError("Failed to fetch creator");
       } finally {
         setIsLoading(false);
       }

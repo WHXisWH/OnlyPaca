@@ -10,14 +10,15 @@ interface SubscribeModalProps {
   isOpen: boolean;
   onClose: () => void;
   creator: Creator;
+  onSuccess?: () => void;
 }
 
-export function SubscribeModal({ isOpen, onClose, creator }: SubscribeModalProps) {
+export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: SubscribeModalProps) {
   const { isConnected } = useAccount();
   const { subscribe, reset, state, isSigning, isPending, isSuccess, isError } =
     useSubscribe({
       onSuccess: () => {
-        // Keep modal open to show success state
+        onSuccess?.();
       },
     });
 
@@ -123,37 +124,40 @@ export function SubscribeModal({ isOpen, onClose, creator }: SubscribeModalProps
         {isError && (
           <div className="text-center py-8">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-red-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">
-              Subscription Failed
-            </h3>
-            <p className="text-dark-400 mb-6">
-              {state.status === "error" ? state.error : "An error occurred"}
-            </p>
+            <h3 className="text-xl font-bold text-white mb-2">Subscription Failed</h3>
+            <div className="text-dark-400 text-sm mb-4 text-left p-4 bg-dark-800/50 rounded-xl">
+              {state.status === "error" ? (
+                <>
+                  <p className="mb-2">{state.error}</p>
+                  {state.error?.includes("nonce") && (
+                    <p className="text-yellow-400 text-xs">The signature nonce was invalid. Please try again.</p>
+                  )}
+                  {state.error?.includes("deadline") && (
+                    <p className="text-yellow-400 text-xs">The signature expired. Please try again quickly.</p>
+                  )}
+                  {state.error?.includes("relayer") && (
+                    <p className="text-yellow-400 text-xs">The relayer service is temporarily unavailable. Try again in a moment.</p>
+                  )}
+                  {(state.error?.includes("network") || state.error?.includes("fetch")) && (
+                    <p className="text-yellow-400 text-xs">Network error — check your connection and try again.</p>
+                  )}
+                  {state.error?.includes("rejected") && (
+                    <p className="text-yellow-400 text-xs">You rejected the signature request. Click Try Again to sign.</p>
+                  )}
+                </>
+              ) : (
+                <p>An unexpected error occurred. Please try again.</p>
+              )}
+            </div>
             <div className="flex gap-3">
-              <button
-                onClick={reset}
-                className="flex-1 px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors"
-              >
+              <button onClick={reset} className="flex-1 px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors">
                 Try Again
               </button>
-              <button
-                onClick={onClose}
-                className="flex-1 px-6 py-3 bg-dark-700 rounded-xl font-semibold text-white hover:bg-dark-600 transition-colors"
-              >
+              <button onClick={onClose} className="flex-1 px-6 py-3 bg-dark-700 rounded-xl font-semibold text-white hover:bg-dark-600 transition-colors">
                 Cancel
               </button>
             </div>
@@ -269,21 +273,19 @@ export function SubscribeModal({ isOpen, onClose, creator }: SubscribeModalProps
 
             {/* How it works */}
             <div className="mt-6 pt-6 border-t border-dark-700">
-              <h4 className="text-sm font-semibold text-white mb-3">
-                How it works:
-              </h4>
-              <ol className="text-sm text-dark-400 space-y-2">
+              <h4 className="text-sm font-semibold text-white mb-3">What happens when you click Subscribe:</h4>
+              <ol className="text-sm text-dark-400 space-y-3">
                 <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold">1.</span>
-                  Sign a message to authorize the subscription
+                  <span className="text-primary-400 font-semibold flex-shrink-0">1.</span>
+                  <span>You sign a message in your wallet — <strong className="text-white">no gas, no on-chain trace</strong> from your address.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold">2.</span>
-                  Our relayer submits the transaction (your wallet stays private)
+                  <span className="text-primary-400 font-semibold flex-shrink-0">2.</span>
+                  <span>The platform relayer submits the transaction and pays gas on your behalf. The subscription fee is included.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold">3.</span>
-                  Access is stored encrypted using FHE
+                  <span className="text-primary-400 font-semibold flex-shrink-0">3.</span>
+                  <span>Your subscription status is <strong className="text-white">encrypted on-chain via FHE</strong> — only you can ever verify it.</span>
                 </li>
               </ol>
             </div>

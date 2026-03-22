@@ -90,6 +90,21 @@ export function useSubscribe(options?: UseSubscribeOptions) {
 
         const result = await response.json();
 
+        // Persist subscription to localStorage so it appears in My Subscriptions
+        try {
+          const key = `onlypaca_subs_${address.toLowerCase()}`;
+          const existing: string[] = JSON.parse(localStorage.getItem(key) || "[]");
+          if (!existing.includes(creatorAddress.toLowerCase())) {
+            existing.push(creatorAddress.toLowerCase());
+            localStorage.setItem(key, JSON.stringify(existing));
+          }
+          // Store timestamp
+          localStorage.setItem(
+            `onlypaca_subtime_${address.toLowerCase()}_${creatorAddress.toLowerCase()}`,
+            new Date().toISOString()
+          );
+        } catch { /* localStorage may be unavailable */ }
+
         setState({ status: "success", hash: result.transactionHash });
         options?.onSuccess?.(result.transactionHash);
       } catch (error) {

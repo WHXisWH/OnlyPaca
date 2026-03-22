@@ -10,6 +10,7 @@ export interface Creator {
   subscriptionDuration: string;
   payoutAddress: string;
   contentURI: string;
+  contentURL?: string; // parsed from contentURI JSON
   socialLinks?: {
     twitter?: string;
     instagram?: string;

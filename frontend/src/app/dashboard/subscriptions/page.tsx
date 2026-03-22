@@ -11,7 +11,7 @@ import { SubscriptionCard } from "@/components/SubscriptionCard";
 
 export default function SubscriptionsDashboardPage() {
   const { isConnected } = useAccount();
-  const { subscriptions, isLoading, verifyAccess, isVerifying } = useSubscriptions();
+  const { subscriptions, isLoading, verifyAccess, isVerifying, verifyStep } = useSubscriptions();
 
   if (!isConnected) {
     return (
@@ -70,6 +70,31 @@ export default function SubscriptionsDashboardPage() {
             </Link>
           </div>
 
+          {/* Verify Access explainer — shown when there are subscriptions */}
+          {!isLoading && subscriptions.length > 0 && (
+            <div className="mb-6 p-4 bg-dark-800/60 border border-dark-700 rounded-xl">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-sm">
+                  <span className="text-white font-semibold">How to unlock content: </span>
+                  <span className="text-dark-400">
+                    Click <strong className="text-white">Verify Access</strong> on any subscription. This sends a small gas transaction (~$0.01) that triggers private FHE decryption — only you see the result. It takes 5–30 seconds. After verification, click <strong className="text-white">View Content</strong> to access the creator&apos;s exclusive link.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Verify step status */}
+          {verifyStep && (
+            <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-xl flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="text-primary-300 text-sm">{verifyStep}</span>
+            </div>
+          )}
+
           {/* Loading State */}
           {isLoading && (
             <div className="flex items-center justify-center py-20">
@@ -120,6 +145,7 @@ export default function SubscriptionsDashboardPage() {
                   subscription={subscription}
                   onVerify={() => verifyAccess(subscription.creatorAddress)}
                   isVerifying={isVerifying === subscription.creatorAddress}
+                  verifyStep={isVerifying === subscription.creatorAddress ? verifyStep : null}
                 />
               ))}
             </div>
