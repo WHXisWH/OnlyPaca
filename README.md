@@ -1,152 +1,117 @@
-# OnlyFHE
+# OnlyPaca
 
 Privacy-first creator subscription platform powered by Fhenix CoFHE (Fully Homomorphic Encryption) on Arbitrum Sepolia.
 
 ## Overview
 
-OnlyFHE enables creators to monetize content while giving subscribers complete privacy. Subscription relationships and revenue data are encrypted on-chain using FHE — even the platform operators cannot read this data.
+OnlyPaca enables creators to monetize content while giving subscribers complete privacy. Subscription relationships and revenue are encrypted on-chain using FHE — even the platform operator cannot read this data.
 
-### Key Features
+**Live:**
+- Frontend: https://only-paca-frontend.vercel.app
+- Relayer API: https://onlypaca.onrender.com/api/health
 
-- **Hidden Subscriptions**: Subscription relationships stored as encrypted `euint8` values
-- **Encrypted Revenue**: Creator earnings accumulated as encrypted `euint64` values
-- **Stealth Payments**: ERC-5564 stealth addresses hide platform participation
-- **Relayer Layer**: `msg.sender` is always the relayer, not the subscriber's wallet
-- **Cryptographic Trust**: Privacy enforced by math, not policy
+**Contracts (Arbitrum Sepolia):**
+- `OnlyFHESubscription`: `0x2451c1c2D71eBec5f63e935670c4bb0Ce19381f5`
+- `OnlyFHERelayer`: `0xbd546CD2fc7A9F614c51fcE7AfE60464D39f9cC0`
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Product Requirements](docs/01_product_requirements.md) | PRD — user stories, feature scope, acceptance criteria |
+| [Smart Contracts](docs/02_smart_contracts.md) | Contract design, FHE types, function reference |
+| [Technical Architecture](docs/03_technical_architecture.md) | System flow, sequence diagrams, API reference |
+| [Business Architecture](docs/04_business_architecture.md) | Revenue model, user journeys, competitive landscape |
+| [Whitepaper Outline](docs/05_whitepaper_outline.md) | Privacy analysis, cryptographic assumptions, future work |
+
+---
 
 ## Project Structure
 
 ```
-onlyfhe/
+onlypaca/
 ├── contracts/     # Solidity smart contracts (Hardhat + CoFHE)
-├── frontend/      # Next.js web application
-├── relayer/       # Node.js relay service
+├── frontend/      # Next.js 14 web application
+├── relayer/       # Node.js relay service (Express + ethers.js)
+├── docs/          # Architecture and product documentation
 └── shared/        # Shared types and constants
 ```
 
-## Quick Start
+---
 
-### Prerequisites
+## Technical Architecture
 
-- Node.js >= 18.0.0
-- pnpm >= 8.0.0
+```mermaid
+sequenceDiagram
+    actor Fan
+    participant Frontend
+    participant Relayer as Relayer Backend
+    participant RelayerC as OnlyFHERelayer
+    participant SubC as OnlyFHESubscription
+    participant CoFHE as Fhenix CoFHE
 
-### Installation
-
-```bash
-# Install dependencies
-pnpm install
-
-# Copy environment files
-cp contracts/.env.example contracts/.env
-cp frontend/.env.example frontend/.env
-cp relayer/.env.example relayer/.env
+    Fan->>Frontend: Click Subscribe
+    Frontend->>Relayer: GET /api/subscribe/nonce/:address
+    Relayer-->>Frontend: { nonce }
+    Frontend->>Fan: Prompt EIP-712 signature (no gas)
+    Fan-->>Frontend: signature
+    Frontend->>Relayer: POST /api/subscribe
+    Relayer->>RelayerC: relaySubscription() + value=price
+    RelayerC->>SubC: activateSubscription()
+    SubC->>CoFHE: FHE.asEuint8(1) + FHE.add(revenue, payment)
+    CoFHE-->>SubC: encrypted handles written on-chain
+    Relayer-->>Frontend: { transactionHash }
 ```
 
-### Development
+---
 
-```bash
-# Compile contracts
-pnpm contracts:compile
+## Business Architecture
 
-# Run contract tests (mock FHE)
-pnpm contracts:test
+```mermaid
+flowchart LR
+    Fan["Fan\n(signs EIP-712, no gas)"]
+    Relayer["Relayer Wallet\n(pays gas + subscription fee)"]
+    Contract["OnlyFHESubscription"]
+    Creator["Creator\n(receives 95% encrypted)"]
+    Platform["OnlyPaca\n(receives 5% plaintext)"]
 
-# Start frontend dev server
-pnpm frontend:dev
-
-# Start relayer dev server
-pnpm relayer:dev
-
-# Start both frontend and relayer
-pnpm dev
+    Fan -->|off-chain signature| Relayer
+    Relayer -->|msg.value = price| Contract
+    Contract -->|euint64 += price × 95%| Creator
+    Contract -->|plaintext += price × 5%| Platform
 ```
 
-### Deployment
-
-```bash
-# Deploy contracts to Arbitrum Sepolia
-pnpm contracts:deploy
-
-# Build frontend for production
-pnpm frontend:build
-
-# Build relayer for production
-pnpm relayer:build
-```
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
-| Smart Contracts | Solidity 0.8.25, CoFHE, OpenZeppelin |
-| Contract Tooling | Hardhat, cofhe-hardhat-plugin |
+|---|---|
+| Smart Contracts | Solidity 0.8.25, `@fhenixprotocol/cofhe-contracts`, OpenZeppelin v5 |
+| Contract Tooling | Hardhat 2.22, cofhe-hardhat-plugin, cofhejs |
 | Frontend | Next.js 14, React 18, Tailwind CSS |
-| Wallet | wagmi, viem, RainbowKit |
-| Backend | Node.js, Express, ethers.js v6 |
-| Network | Arbitrum Sepolia (testnet) |
+| Wallet | wagmi v2, viem, RainbowKit, WalletConnect |
+| Relayer Backend | Node.js 20, Express 4, ethers.js v6, TypeScript |
+| Network | Arbitrum Sepolia (chainId: 421614) |
+| FHE | Fhenix CoFHE co-processor |
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend                                 │
-│  (Next.js + RainbowKit + wagmi)                                 │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-┌─────────────────┐ ┌─────────────┐ ┌─────────────────┐
-│  Sign EIP-712   │ │  Read Chain │ │ Verify Access   │
-│  (off-chain)    │ │  (public)   │ │ (FHE decrypt)   │
-└────────┬────────┘ └─────────────┘ └─────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Relayer Service                             │
-│  (Express.js + ethers.js)                                       │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    OnlyFHERelayer.sol                           │
-│  - Verify EIP-712 signature                                     │
-│  - Forward to subscription contract                             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 OnlyFHESubscription.sol                         │
-│  - Store encrypted subscription state (euint8)                  │
-│  - Accumulate encrypted revenue (euint64)                       │
-│  - Permission-based decryption                                  │
-└─────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Fhenix CoFHE                                  │
-│  - FHE operations on Arbitrum Sepolia                           │
-│  - Coprocessor for encrypted computation                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+---
 
 ## Privacy Guarantees
 
-| Data | Visibility | Protected By |
-|------|------------|--------------|
-| Subscription relationships | Subscriber only | FHE (`euint8`) |
-| Creator revenue | Creator only | FHE (`euint64`) |
-| Payment transactions | Public as normal ETH transfers | Stealth Address |
-| Contract interactions | Relayer address only | Relayer pattern |
-| Subscriber count | Public | Not encrypted (social proof) |
+| Data | Visible To | Protected By |
+|---|---|---|
+| Subscription relationship | Subscriber only | FHE `euint8` |
+| Creator revenue | Creator only | FHE `euint64` |
+| Subscriber identity | No one (relayer is `msg.sender`) | Relayer pattern + EIP-712 |
+| Subscriber count | Public | Intentional (social proof) |
 
-## License
-
-MIT
+---
 
 ## Links
 
 - [Fhenix Protocol](https://www.fhenix.io/)
 - [CoFHE Documentation](https://docs.fhenix.zone/)
-- [ERC-5564 Stealth Addresses](https://eips.ethereum.org/EIPS/eip-5564)
+- [Arbitrum Sepolia Explorer](https://sepolia.arbiscan.io/)
