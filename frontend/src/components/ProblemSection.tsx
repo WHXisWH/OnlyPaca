@@ -1,39 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, ReactNode } from "react";
+import { useState } from "react";
+import { FadeIn } from "./FadeIn";
 
-// Fade-in animation wrapper using Intersection Observer
-function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.15 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      className="transition-all duration-600"
-      style={{
-        transitionDelay: `${delay}ms`,
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(20px)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// Problem data
 const web2Problems = [
   {
     icon: "🏦",
@@ -98,8 +67,14 @@ export function ProblemSection() {
 
         {/* Tab toggle */}
         <FadeIn delay={100}>
-          <div className="flex justify-center gap-3 mb-10">
+          <div
+            className="flex justify-center gap-3 mb-10"
+            role="tablist"
+            aria-label="Problem categories"
+          >
             <button
+              role="tab"
+              aria-selected={activeTab === "web2"}
               onClick={() => setActiveTab("web2")}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                 activeTab === "web2"
@@ -110,6 +85,8 @@ export function ProblemSection() {
               Web2 (OnlyFans)
             </button>
             <button
+              role="tab"
+              aria-selected={activeTab === "onchain"}
               onClick={() => setActiveTab("onchain")}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                 activeTab === "onchain"
@@ -123,7 +100,7 @@ export function ProblemSection() {
         </FadeIn>
 
         {/* Problem cards */}
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-3 gap-5" role="tabpanel">
           {problems.map((problem, i) => (
             <FadeIn key={problem.title} delay={i * 80}>
               <div className="bg-dark-800/50 border border-dark-700 rounded-2xl p-6 h-full hover:border-dark-600 transition-colors">

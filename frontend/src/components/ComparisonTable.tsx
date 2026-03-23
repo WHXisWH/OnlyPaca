@@ -1,39 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, ReactNode } from "react";
+import { FadeIn } from "./FadeIn";
 
-// Fade-in animation wrapper
-function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.15 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      className="transition-all duration-600"
-      style={{
-        transitionDelay: `${delay}ms`,
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(20px)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// Icons
 const CheckIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -57,7 +25,6 @@ const LockIcon = () => (
   </svg>
 );
 
-// Comparison data
 const rows = [
   {
     label: "Subscriber identity",
@@ -114,10 +81,20 @@ export function ComparisonTable() {
           </div>
         </FadeIn>
 
+        {/* Mobile scroll hint */}
+        <FadeIn delay={80}>
+          <div className="md:hidden flex items-center justify-center gap-2 mb-4 text-dark-500 text-xs">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+            </svg>
+            <span>Swipe to see full comparison</span>
+          </div>
+        </FadeIn>
+
         {/* Comparison table */}
         <FadeIn delay={100}>
-          <div className="overflow-x-auto rounded-xl border border-dark-700">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-xl border border-dark-700 scrollbar-thin scrollbar-thumb-dark-600 scrollbar-track-dark-800">
+            <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-dark-700">
                   <th className="px-4 py-4 text-left text-dark-400 font-medium">

@@ -4,6 +4,7 @@ import { ProblemSection } from "@/components/ProblemSection";
 import { ComparisonTable } from "@/components/ComparisonTable";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Thesis } from "@/components/Thesis";
+import { CTASection } from "@/components/CTASection";
 import { CreatorScroll } from "@/components/CreatorScroll";
 import { Footer } from "@/components/Footer";
 
@@ -27,6 +28,9 @@ export default function Home() {
 
       {/* Thesis - Final statement */}
       <Thesis />
+
+      {/* CTA - Conversion prompt */}
+      <CTASection />
 
       {/* Creator showcase - Social proof */}
       <CreatorScroll />

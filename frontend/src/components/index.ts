@@ -2,6 +2,9 @@
 export { Header } from "./Header";
 export { Footer } from "./Footer";
 
+// Animation components
+export { FadeIn } from "./FadeIn";
+
 // Landing page components
 export { Hero } from "./Hero";
 export { ProblemSection } from "./ProblemSection";
@@ -9,6 +12,7 @@ export { ComparisonTable } from "./ComparisonTable";
 export { Features } from "./Features";
 export { HowItWorks } from "./HowItWorks";
 export { Thesis } from "./Thesis";
+export { CTASection } from "./CTASection";
 export { FeaturedSlider } from "./FeaturedSlider";
 export { CreatorScroll } from "./CreatorScroll";
 
