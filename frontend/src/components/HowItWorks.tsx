@@ -1,71 +1,183 @@
 "use client";
 
+import { useEffect, useRef, useState, ReactNode } from "react";
+
+// Fade-in animation wrapper
+function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setIsVisible(true);
+      },
+      { threshold: 0.15 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="transition-all duration-600"
+      style={{
+        transitionDelay: `${delay}ms`,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(20px)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Code mock components for visual demonstration
+function EIP712Mock() {
+  return (
+    <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-4 font-mono text-xs">
+      <div className="text-primary-400 mb-2">// EIP-712 typed data — wallet only</div>
+      <div>
+        <span className="text-sky-400">creator:</span>{" "}
+        <span className="text-green-400">0xCreator…</span>
+      </div>
+      <div>
+        <span className="text-sky-400">subscriber:</span>{" "}
+        <span className="text-green-400">0xYou…</span>
+      </div>
+      <div>
+        <span className="text-sky-400">deadline:</span>{" "}
+        <span className="text-amber-400">1743290400</span>
+      </div>
+      <div className="mt-3 text-green-400 text-[11px]">
+        ✓ Signed locally — never broadcast
+      </div>
+    </div>
+  );
+}
+
+function RelayerMock() {
+  return (
+    <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-4 font-mono text-xs">
+      <div className="text-primary-400 mb-2">// Arbiscan — what the chain sees</div>
+      <div>
+        <span className="text-sky-400">From:</span>{" "}
+        <span className="text-red-400">0xRelayer… (not you)</span>
+      </div>
+      <div>
+        <span className="text-sky-400">To:</span>{" "}
+        <span className="text-green-400">OnlyFHESubscription</span>
+      </div>
+      <div>
+        <span className="text-sky-400">Method:</span>{" "}
+        <span className="text-amber-400">activateSubscription()</span>
+      </div>
+      <div className="mt-3 text-green-400 text-[11px]">
+        ✓ Your wallet: never appears
+      </div>
+    </div>
+  );
+}
+
+function FHEMock() {
+  return (
+    <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-4 font-mono text-xs">
+      <div className="text-primary-400 mb-2">// Contract storage slot — public</div>
+      <div>
+        <span className="text-sky-400">_subscriptions[C][S]:</span>
+      </div>
+      <div className="pl-4 text-dark-500 break-all">
+        0x3f7a9c2e8b1d…
+        <span className="text-dark-600">(euint8 ciphertext)</span>
+      </div>
+      <div className="mt-2">
+        <span className="text-sky-400">_creatorRevenue[C]:</span>
+      </div>
+      <div className="pl-4 text-dark-500 break-all">
+        0xa1f2d8e4c3b9…
+        <span className="text-dark-600">(euint64 ciphertext)</span>
+      </div>
+      <div className="mt-3 text-green-400 text-[11px]">
+        ✓ Anyone can read this. Nobody can decrypt it.
+      </div>
+    </div>
+  );
+}
+
+// Step data with mock components
 const steps = [
   {
-    n: "1",
-    title: "Connect wallet",
-    desc: "Your wallet is only used to sign messages — it never submits transactions to the platform.",
+    num: "01",
+    title: "You sign. Nothing hits chain.",
+    subtitle: "EIP-712 off-chain signature",
+    desc: "You authorize a subscription with a wallet signature. No gas. No on-chain trace. Your address never touches the contract.",
+    mock: <EIP712Mock />,
   },
   {
-    n: "2",
-    title: "Pick a creator",
-    desc: "Browse public profiles: price, subscriber count, content preview. No subscription history is visible.",
+    num: "02",
+    title: "Relayer submits. Not you.",
+    subtitle: "msg.sender = Relayer",
+    desc: "Our Relayer takes your signature, pays gas, and submits the transaction. On-chain, the call comes from the Relayer — your wallet is invisible.",
+    mock: <RelayerMock />,
   },
   {
-    n: "3",
-    title: "Sign off-chain",
-    desc: "You sign an EIP-712 authorization. No gas. No on-chain trace from your wallet.",
-  },
-  {
-    n: "4",
-    title: "Relayer submits",
-    desc: "Our Relayer posts the transaction. On-chain, msg.sender is the Relayer — never you.",
-  },
-  {
-    n: "5",
-    title: "FHE unlocks content",
-    desc: "The contract verifies access using encrypted state. Only you can decrypt your own subscription status.",
+    num: "03",
+    title: "FHE encrypts everything at rest.",
+    subtitle: "euint8 + euint64 on-chain",
+    desc: "The contract writes your subscription as a ciphertext. Creator revenue adds up as ciphertext. Even we cannot read these values — only you can decrypt your own data.",
+    mock: <FHEMock />,
   },
 ];
 
 export function HowItWorks() {
   return (
-    <section className="py-32 px-4 sm:px-6 lg:px-8 bg-dark-900/40">
+    <section className="py-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-20">
-          <p className="text-dark-500 text-xs uppercase tracking-[0.2em] mb-6">The Flow</p>
-          <h2 className="text-4xl sm:text-5xl font-bold text-white">
-            Five steps.<br />
-            <span className="gradient-text">Zero exposure.</span>
-          </h2>
-        </div>
+        {/* Section header */}
+        <FadeIn>
+          <div className="text-center mb-16">
+            <p className="text-dark-500 text-xs uppercase tracking-[0.2em] mb-4">
+              How It Works
+            </p>
+            <h2 className="text-4xl sm:text-5xl font-bold">
+              <span className="text-white">Three layers of protection,</span>
+              <br />
+              <span className="gradient-text">working simultaneously.</span>
+            </h2>
+          </div>
+        </FadeIn>
 
-        {/* Vertical timeline */}
-        <div className="relative">
-          {/* Line */}
-          <div className="absolute left-5 top-0 bottom-0 w-px bg-dark-800 hidden sm:block" />
-
-          <div className="space-y-0">
-            {steps.map((step, i) => (
-              <div key={i} className="relative sm:pl-16 py-8 group">
-                {/* Circle */}
-                <div className="hidden sm:flex absolute left-0 top-8 w-10 h-10 rounded-full border border-dark-700 bg-dark-950 items-center justify-center group-hover:border-primary-500 group-hover:bg-primary-500/10 transition-all">
-                  <span className="text-dark-500 text-sm font-mono group-hover:text-primary-400 transition-colors">
-                    {step.n}
-                  </span>
-                </div>
-
-                {/* Content */}
-                <div className="grid sm:grid-cols-2 gap-3 items-baseline">
-                  <h3 className="text-xl font-semibold text-white flex items-center gap-3">
-                    <span className="sm:hidden text-dark-600 text-sm font-mono">{step.n}.</span>
+        {/* Steps with code mocks */}
+        <div className="flex flex-col gap-6">
+          {steps.map((step, i) => (
+            <FadeIn key={step.num} delay={i * 120}>
+              <div
+                className={`grid md:grid-cols-2 gap-8 items-center bg-dark-800/30 border border-dark-700 rounded-2xl p-8 ${
+                  i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""
+                }`}
+              >
+                {/* Text content */}
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-xs font-bold text-primary-400 font-mono bg-primary-500/10 px-2 py-1 rounded">
+                      {step.num}
+                    </span>
+                    <span className="text-xs text-dark-500 uppercase tracking-wider">
+                      {step.subtitle}
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 leading-tight">
                     {step.title}
                   </h3>
-                  <p className="text-dark-400 text-sm leading-relaxed">{step.desc}</p>
+                  <p className="text-dark-400 leading-relaxed">{step.desc}</p>
                 </div>
+
+                {/* Code mock */}
+                <div>{step.mock}</div>
               </div>
-            ))}
-          </div>
+            </FadeIn>
+          ))}
         </div>
       </div>
     </section>

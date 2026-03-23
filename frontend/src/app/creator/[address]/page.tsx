@@ -2,15 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { useAccount, useSignTypedData, usePublicClient } from "wagmi";
 import { formatEther } from "viem";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SubscribeModal } from "@/components/SubscribeModal";
 import { useCreator } from "@/hooks/useCreators";
 import { SUBSCRIPTION_ABI } from "@/config/contracts";
-import { CONTRACT_ADDRESSES } from "@/config/wagmi";
+import { CONTRACT_ADDRESSES, API_ENDPOINTS } from "@/config/wagmi";
 import { SubscriptionStatus } from "@/types";
+
+// EIP-712 type definitions for access decrypt
+const ACCESS_DECRYPT_TYPES = {
+  AccessDecrypt: [
+    { name: "creator", type: "address" },
+    { name: "subscriber", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
 
 function getStoredVerifiedStatus(userAddress: string, creatorAddress: string): SubscriptionStatus | null {
   try {
@@ -43,7 +53,7 @@ export default function CreatorProfilePage() {
   const params = useParams();
   const address = params.address as string;
   const { address: userAddress, isConnected } = useAccount();
-  const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const publicClient = usePublicClient();
 
   const { creator, isLoading, error } = useCreator(address);
@@ -63,18 +73,64 @@ export default function CreatorProfilePage() {
     }
   }, [userAddress, address]);
 
+  // Verify access via Relayer (privacy-preserving)
   const handleVerifyAccess = async () => {
     if (!userAddress || !publicClient) return;
     setIsVerifying(true);
-    setVerifyStep("Sending transaction...");
+    setVerifyStep("Signing request...");
 
     try {
-      await writeContractAsync({
-        address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
-        abi: SUBSCRIPTION_ABI,
-        functionName: "requestAccessDecrypt",
-        args: [address as `0x${string}`],
+      // 1. Get nonce from relayer
+      const nonceResponse = await fetch(
+        `${API_ENDPOINTS.relayer}/api/subscribe/nonce/${userAddress}`
+      );
+
+      if (!nonceResponse.ok) {
+        throw new Error("Failed to get nonce");
+      }
+
+      const { nonce } = await nonceResponse.json();
+
+      // 2. Calculate deadline (1 hour from now)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+
+      // 3. Sign EIP-712 message
+      const signature = await signTypedDataAsync({
+        domain: {
+          name: "OnlyFHERelayer",
+          version: "1",
+          chainId: BigInt(421614),
+          verifyingContract: CONTRACT_ADDRESSES.relayer as `0x${string}`,
+        },
+        types: ACCESS_DECRYPT_TYPES,
+        primaryType: "AccessDecrypt",
+        message: {
+          creator: address as `0x${string}`,
+          subscriber: userAddress,
+          nonce: BigInt(nonce),
+          deadline,
+        },
       });
+
+      setVerifyStep("Sending to relayer...");
+
+      // 4. Send to relayer
+      const response = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/access-decrypt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creator: address,
+          subscriber: userAddress,
+          deadline: deadline.toString(),
+          nonce: nonce.toString(),
+          signature,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Access decrypt failed");
+      }
 
       setVerifyStep("Waiting for FHE decryption (~5–30s)...");
 
@@ -296,7 +352,7 @@ export default function CreatorProfilePage() {
                     Your subscription was recorded. To unlock content, you need to trigger a private FHE decryption — this proves your access without revealing your identity.
                   </p>
                   <p className="text-dark-500 text-xs mb-4">
-                    This requires a small gas transaction on Arbitrum Sepolia (~$0.01), then waits 5–30 seconds for the FHE coprocessor.
+                    You&apos;ll sign a message (no gas), the relayer submits it privately, then the FHE coprocessor decrypts your status (~5–30s).
                   </p>
                   <button
                     onClick={handleVerifyAccess}

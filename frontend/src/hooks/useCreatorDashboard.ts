@@ -1,10 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useReadContract, usePublicClient } from "wagmi";
+import { useAccount, useWriteContract, useReadContract, usePublicClient, useSignTypedData } from "wagmi";
 import { SUBSCRIPTION_ABI } from "@/config/contracts";
-import { CONTRACT_ADDRESSES } from "@/config/wagmi";
+import { CONTRACT_ADDRESSES, API_ENDPOINTS } from "@/config/wagmi";
 import { Creator } from "@/types";
+
+// EIP-712 type definitions for relayer operations
+const REVENUE_DECRYPT_TYPES = {
+  RevenueDecrypt: [
+    { name: "creator", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+const WITHDRAW_TYPES = {
+  Withdraw: [
+    { name: "creator", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
 
 interface RegisterParams {
   name: string;
@@ -17,6 +34,7 @@ interface RegisterParams {
 export function useCreatorDashboard() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const publicClient = usePublicClient();
 
   const [profile, setProfile] = useState<Creator | null>(null);
@@ -159,20 +177,63 @@ export function useCreatorDashboard() {
     [address, writeContractAsync, refetchProfile]
   );
 
-  // Request revenue decryption with real FHE polling
+  // Request revenue decryption via Relayer (privacy-preserving)
   const requestRevenueDecrypt = useCallback(async () => {
     if (!address || !publicClient) return;
 
     setIsDecryptingRevenue(true);
-    setRevenueDecryptStep("Sending transaction...");
+    setRevenueDecryptStep("Signing request...");
 
     try {
-      await writeContractAsync({
-        address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
-        abi: SUBSCRIPTION_ABI,
-        functionName: "requestRevenueDecrypt",
-        args: [],
+      // 1. Get nonce from relayer
+      const nonceResponse = await fetch(
+        `${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`
+      );
+
+      if (!nonceResponse.ok) {
+        throw new Error("Failed to get nonce");
+      }
+
+      const { nonce } = await nonceResponse.json();
+
+      // 2. Calculate deadline (1 hour from now)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+
+      // 3. Sign EIP-712 message
+      const signature = await signTypedDataAsync({
+        domain: {
+          name: "OnlyFHERelayer",
+          version: "1",
+          chainId: BigInt(421614),
+          verifyingContract: CONTRACT_ADDRESSES.relayer as `0x${string}`,
+        },
+        types: REVENUE_DECRYPT_TYPES,
+        primaryType: "RevenueDecrypt",
+        message: {
+          creator: address,
+          nonce: BigInt(nonce),
+          deadline,
+        },
       });
+
+      setRevenueDecryptStep("Sending to relayer...");
+
+      // 4. Send to relayer
+      const response = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/revenue-decrypt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creator: address,
+          deadline: deadline.toString(),
+          nonce: nonce.toString(),
+          signature,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Revenue decrypt failed");
+      }
 
       setRevenueDecryptStep("Waiting for FHE decryption (~5–30s)...");
 
@@ -214,20 +275,62 @@ export function useCreatorDashboard() {
     } finally {
       setIsDecryptingRevenue(false);
     }
-  }, [address, publicClient, writeContractAsync]);
+  }, [address, publicClient, signTypedDataAsync]);
 
+  // Withdraw revenue via Relayer (privacy-preserving)
   const withdrawRevenue = useCallback(async () => {
     if (!address || revenue === null || revenue === BigInt(0)) return;
 
     setIsWithdrawing(true);
 
     try {
-      await writeContractAsync({
-        address: CONTRACT_ADDRESSES.subscription as `0x${string}`,
-        abi: SUBSCRIPTION_ABI,
-        functionName: "withdrawRevenue",
-        args: [],
+      // 1. Get nonce from relayer
+      const nonceResponse = await fetch(
+        `${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`
+      );
+
+      if (!nonceResponse.ok) {
+        throw new Error("Failed to get nonce");
+      }
+
+      const { nonce } = await nonceResponse.json();
+
+      // 2. Calculate deadline (1 hour from now)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+
+      // 3. Sign EIP-712 message
+      const signature = await signTypedDataAsync({
+        domain: {
+          name: "OnlyFHERelayer",
+          version: "1",
+          chainId: BigInt(421614),
+          verifyingContract: CONTRACT_ADDRESSES.relayer as `0x${string}`,
+        },
+        types: WITHDRAW_TYPES,
+        primaryType: "Withdraw",
+        message: {
+          creator: address,
+          nonce: BigInt(nonce),
+          deadline,
+        },
       });
+
+      // 4. Send to relayer
+      const response = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creator: address,
+          deadline: deadline.toString(),
+          nonce: nonce.toString(),
+          signature,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Withdrawal failed");
+      }
 
       setRevenue(BigInt(0));
     } catch (error) {
@@ -236,7 +339,7 @@ export function useCreatorDashboard() {
     } finally {
       setIsWithdrawing(false);
     }
-  }, [address, revenue, writeContractAsync]);
+  }, [address, revenue, signTypedDataAsync]);
 
   return {
     profile,

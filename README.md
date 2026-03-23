@@ -2,17 +2,29 @@
 
 Privacy-first creator subscription platform powered by Fhenix CoFHE (Fully Homomorphic Encryption) on Arbitrum Sepolia.
 
+## The Problem
+
+**Web2 platforms betray you.** OnlyFans can freeze your account, sell your subscriber list, or hand data to authorities — your economic relationship is controlled by intermediaries.
+
+**Naive on-chain is worse.** Moving to a public blockchain solves censorship, but creates a privacy catastrophe: every subscription is permanently visible on Etherscan. Anyone can enumerate creators, query subscribers, and build a social graph.
+
+**FHE is the only solution.** Fully Homomorphic Encryption computes on encrypted data without decrypting it. Subscription relationships are stored as ciphertext (`euint8`), creator revenue accumulates as ciphertext (`euint64`), and only authorized parties can decrypt their own data. No one else — not even us — can read it.
+
 ## Overview
 
-OnlyPaca enables creators to monetize content while giving subscribers complete privacy. Subscription relationships and revenue are encrypted on-chain using FHE — even the platform operator cannot read this data.
+OnlyPaca implements a **three-layer privacy architecture**:
+
+1. **Relayer pattern** — Fans sign EIP-712 messages off-chain. The Relayer submits transactions, so fan wallets never touch the contract.
+2. **FHE encrypted state** — Subscriptions and revenue are stored as ciphertext on-chain. Even if you read the storage slot, you see only noise.
+3. **Permission-based decryption** — Only the subscriber can verify their own access. Only the creator can view their own revenue. The platform operator is cryptographically locked out.
 
 **Live:**
-- Frontend: https://only-paca-frontend.vercel.app
+- Frontend: https://only-paca.vercel.app
 - Relayer API: https://onlypaca.onrender.com/api/health
 
 **Contracts (Arbitrum Sepolia):**
-- `OnlyFHESubscription`: `0x2451c1c2D71eBec5f63e935670c4bb0Ce19381f5`
-- `OnlyFHERelayer`: `0xbd546CD2fc7A9F614c51fcE7AfE60464D39f9cC0`
+- `OnlyFHESubscription`: `0xdcDeA2a2F979c3D905331765349f167828aF4c3c`
+- `OnlyFHERelayer`: `0x51dc4d07b7e0fdd3aeA06F547fF16E07E4545228`
 
 ---
 
@@ -20,6 +32,7 @@ OnlyPaca enables creators to monetize content while giving subscribers complete 
 
 | Document | Description |
 |---|---|
+| [Problem Narrative](docs/00_narrative.md) | Why Web2 fails, why naive on-chain is worse, why FHE is the only solution |
 | [Product Requirements](docs/01_product_requirements.md) | PRD — user stories, feature scope, acceptance criteria |
 | [Smart Contracts](docs/02_smart_contracts.md) | Contract design, FHE types, function reference |
 | [Technical Architecture](docs/03_technical_architecture.md) | System flow, sequence diagrams, API reference |
@@ -107,6 +120,25 @@ flowchart LR
 | Creator revenue | Creator only | FHE `euint64` |
 | Subscriber identity | No one (relayer is `msg.sender`) | Relayer pattern + EIP-712 |
 | Subscriber count | Public | Intentional (social proof) |
+
+---
+
+## Relayer API Reference
+
+Base URL: `https://onlypaca.onrender.com`
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Health check |
+| `/api/subscribe/nonce/:address` | GET | Get current nonce for EIP-712 signing |
+| `/api/subscribe` | POST | Relay subscription (fan → creator) |
+| `/api/subscribe/access-decrypt` | POST | Relay access verification request |
+| `/api/subscribe/revenue-decrypt` | POST | Relay revenue decryption request |
+| `/api/subscribe/withdraw` | POST | Relay creator withdrawal |
+| `/api/creators` | GET | List all registered creators |
+| `/api/creators/:address` | GET | Get creator profile |
+
+All relay endpoints require EIP-712 signed messages. The relayer pays gas on behalf of users.
 
 ---
 

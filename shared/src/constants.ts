@@ -26,6 +26,22 @@ export const EIP712_TYPES = {
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
   ],
+  AccessDecrypt: [
+    { name: "creator", type: "address" },
+    { name: "subscriber", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+  RevenueDecrypt: [
+    { name: "creator", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+  Withdraw: [
+    { name: "creator", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
 } as const;
 
 // EIP-712 domain for Relayer contract

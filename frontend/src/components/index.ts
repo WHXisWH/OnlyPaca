@@ -4,8 +4,13 @@ export { Footer } from "./Footer";
 
 // Landing page components
 export { Hero } from "./Hero";
+export { ProblemSection } from "./ProblemSection";
+export { ComparisonTable } from "./ComparisonTable";
 export { Features } from "./Features";
 export { HowItWorks } from "./HowItWorks";
+export { Thesis } from "./Thesis";
+export { FeaturedSlider } from "./FeaturedSlider";
+export { CreatorScroll } from "./CreatorScroll";
 
 // Creator components
 export { CreatorCard } from "./CreatorCard";

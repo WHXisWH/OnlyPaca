@@ -350,12 +350,25 @@ contract OnlyFHESubscription is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Request decryption of creator's revenue
+     * @notice Request decryption of creator's revenue (direct call)
      * @dev Initiates async decryption through CoFHE coprocessor
+     *      WARNING: This exposes caller's wallet on-chain. Use relayRequestRevenueDecrypt for privacy.
      *      Call getRevenue() after decryption completes
      */
     function requestRevenueDecrypt() external onlyRegisteredCreator(msg.sender) {
         FHE.decrypt(_creatorRevenue[msg.sender]);
+    }
+
+    /**
+     * @notice Request decryption of creator's revenue (via Relayer)
+     * @dev Called by Relayer on behalf of creator to protect privacy
+     *      The creator's wallet never appears in the transaction
+     * @param creator Creator address (verified via EIP-712 signature)
+     */
+    function relayRequestRevenueDecrypt(
+        address creator
+    ) external onlyRelayer onlyRegisteredCreator(creator) {
+        FHE.decrypt(_creatorRevenue[creator]);
     }
 
     /**
@@ -408,32 +421,53 @@ contract OnlyFHESubscription is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Withdraw all accumulated revenue
+     * @notice Withdraw all accumulated revenue (direct call)
      * @dev Decrypts revenue, transfers to payout address, resets revenue to 0
+     *      WARNING: This exposes caller's wallet on-chain. Use relayWithdrawRevenue for privacy.
      *      NOTE: This is a two-step process:
      *      1. Call requestRevenueDecrypt() and wait
      *      2. Call withdrawRevenue()
      */
     function withdrawRevenue() external nonReentrant onlyRegisteredCreator(msg.sender) {
+        _withdrawRevenue(msg.sender);
+    }
+
+    /**
+     * @notice Withdraw all accumulated revenue (via Relayer)
+     * @dev Called by Relayer on behalf of creator to protect privacy
+     *      The creator's wallet never appears in the transaction
+     * @param creator Creator address (verified via EIP-712 signature)
+     */
+    function relayWithdrawRevenue(
+        address creator
+    ) external nonReentrant onlyRelayer onlyRegisteredCreator(creator) {
+        _withdrawRevenue(creator);
+    }
+
+    /**
+     * @notice Internal function to handle revenue withdrawal
+     * @param creator Creator address to withdraw for
+     */
+    function _withdrawRevenue(address creator) internal {
         // Get decrypted revenue
-        (uint256 amount, bool decrypted) = FHE.getDecryptResultSafe(_creatorRevenue[msg.sender]);
+        (uint256 amount, bool decrypted) = FHE.getDecryptResultSafe(_creatorRevenue[creator]);
         if (!decrypted) revert DecryptNotReady();
         if (amount == 0) revert NoRevenueToWithdraw();
 
         // Reset encrypted revenue to zero
         euint64 newRevenue = FHE.asEuint64(0);
-        _creatorRevenue[msg.sender] = newRevenue;
+        _creatorRevenue[creator] = newRevenue;
 
         // Re-establish permissions for the new zero value
         FHE.allowThis(newRevenue);
-        FHE.allow(newRevenue, msg.sender);
+        FHE.allow(newRevenue, creator);
 
         // Transfer to creator's payout address
-        address destination = creators[msg.sender].payoutAddress;
+        address destination = creators[creator].payoutAddress;
         (bool success, ) = destination.call{value: amount}("");
         if (!success) revert TransferFailed();
 
-        emit RevenueWithdrawn(msg.sender, destination);
+        emit RevenueWithdrawn(creator, destination);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -525,12 +559,27 @@ contract OnlyFHESubscription is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Request decryption of subscriber's access status
+     * @notice Request decryption of subscriber's access status (direct call)
      * @dev Initiates async decryption, call verifyAccess() after completion
+     *      WARNING: This exposes caller's wallet on-chain. Use relayRequestAccessDecrypt for privacy.
      * @param creator Creator address to check access for
      */
     function requestAccessDecrypt(address creator) external {
         FHE.decrypt(_subscriptions[creator][msg.sender]);
+    }
+
+    /**
+     * @notice Request decryption of subscriber's access status (via Relayer)
+     * @dev Called by Relayer on behalf of subscriber to protect privacy
+     *      The subscriber's wallet never appears in the transaction
+     * @param creator Creator address to check access for
+     * @param subscriber Real subscriber address (verified via EIP-712 signature)
+     */
+    function relayRequestAccessDecrypt(
+        address creator,
+        address subscriber
+    ) external onlyRelayer {
+        FHE.decrypt(_subscriptions[creator][subscriber]);
     }
 
     /**

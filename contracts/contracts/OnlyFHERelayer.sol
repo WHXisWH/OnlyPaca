@@ -16,6 +16,15 @@ interface IOnlyFHESubscription {
         address subscriber
     ) external payable;
 
+    function relayRequestAccessDecrypt(
+        address creator,
+        address subscriber
+    ) external;
+
+    function relayRequestRevenueDecrypt(address creator) external;
+
+    function relayWithdrawRevenue(address creator) external;
+
     function creators(
         address creator
     )
@@ -63,6 +72,33 @@ contract OnlyFHERelayer is EIP712, Ownable, ReentrancyGuard {
     bytes32 private constant SUBSCRIBE_TYPEHASH =
         keccak256(
             "Subscribe(address creator,address subscriber,uint256 nonce,uint256 deadline)"
+        );
+
+    /**
+     * @notice EIP-712 typehash for AccessDecrypt message
+     * @dev keccak256("AccessDecrypt(address creator,address subscriber,uint256 nonce,uint256 deadline)")
+     */
+    bytes32 private constant ACCESS_DECRYPT_TYPEHASH =
+        keccak256(
+            "AccessDecrypt(address creator,address subscriber,uint256 nonce,uint256 deadline)"
+        );
+
+    /**
+     * @notice EIP-712 typehash for RevenueDecrypt message
+     * @dev keccak256("RevenueDecrypt(address creator,uint256 nonce,uint256 deadline)")
+     */
+    bytes32 private constant REVENUE_DECRYPT_TYPEHASH =
+        keccak256(
+            "RevenueDecrypt(address creator,uint256 nonce,uint256 deadline)"
+        );
+
+    /**
+     * @notice EIP-712 typehash for Withdraw message
+     * @dev keccak256("Withdraw(address creator,uint256 nonce,uint256 deadline)")
+     */
+    bytes32 private constant WITHDRAW_TYPEHASH =
+        keccak256(
+            "Withdraw(address creator,uint256 nonce,uint256 deadline)"
         );
 
     /**
@@ -117,6 +153,37 @@ contract OnlyFHERelayer is EIP712, Ownable, ReentrancyGuard {
         address indexed creator,
         uint256 timestamp,
         uint256 nonce
+    );
+
+    /**
+     * @notice Emitted when an access decrypt request is relayed
+     * @dev Subscriber address intentionally omitted for privacy
+     * @param creator The creator whose access is being checked
+     * @param timestamp Block timestamp of the relay
+     */
+    event AccessDecryptRelayed(
+        address indexed creator,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Emitted when a revenue decrypt request is relayed
+     * @param creator The creator requesting revenue decrypt
+     * @param timestamp Block timestamp of the relay
+     */
+    event RevenueDecryptRelayed(
+        address indexed creator,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Emitted when a withdrawal is relayed
+     * @param creator The creator withdrawing revenue
+     * @param timestamp Block timestamp of the relay
+     */
+    event WithdrawRelayed(
+        address indexed creator,
+        uint256 timestamp
     );
 
     /**
@@ -321,6 +388,143 @@ contract OnlyFHERelayer is EIP712, Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Relay an access decrypt request on behalf of a subscriber
+     * @dev Protects subscriber privacy by hiding their wallet from on-chain trace
+     * @param creator The creator to check access for
+     * @param subscriber The real subscriber's address
+     * @param deadline Unix timestamp after which signature is invalid
+     * @param nonce Anti-replay nonce
+     * @param signature EIP-712 signature from the subscriber
+     */
+    function relayAccessDecrypt(
+        address creator,
+        address subscriber,
+        uint256 deadline,
+        uint256 nonce,
+        bytes calldata signature
+    ) external onlyOwner whenNotPaused nonReentrant {
+        // Validate deadline
+        if (block.timestamp > deadline) revert ExpiredDeadline();
+        if (deadline > block.timestamp + MAX_DEADLINE_EXTENSION) revert DeadlineTooFar();
+
+        // Validate nonce
+        uint256 expectedNonce = nonces[subscriber];
+        if (nonce != expectedNonce) revert InvalidNonce(expectedNonce, nonce);
+
+        // Verify signature
+        bytes32 structHash = keccak256(
+            abi.encode(ACCESS_DECRYPT_TYPEHASH, creator, subscriber, nonce, deadline)
+        );
+        bytes32 digest = _hashTypedDataV4(structHash);
+
+        bytes32 signatureHash = keccak256(signature);
+        if (usedSignatures[signatureHash]) revert SignatureAlreadyUsed();
+
+        address recoveredSigner = digest.recover(signature);
+        if (recoveredSigner != subscriber) revert InvalidSignature();
+
+        // Update state
+        usedSignatures[signatureHash] = true;
+        nonces[subscriber] = expectedNonce + 1;
+        totalRelayed++;
+
+        // Forward to subscription contract
+        subscriptionContract.relayRequestAccessDecrypt(creator, subscriber);
+
+        emit AccessDecryptRelayed(creator, block.timestamp);
+    }
+
+    /**
+     * @notice Relay a revenue decrypt request on behalf of a creator
+     * @dev Protects creator privacy by hiding their wallet from on-chain trace
+     * @param creator The creator's address
+     * @param deadline Unix timestamp after which signature is invalid
+     * @param nonce Anti-replay nonce
+     * @param signature EIP-712 signature from the creator
+     */
+    function relayRevenueDecrypt(
+        address creator,
+        uint256 deadline,
+        uint256 nonce,
+        bytes calldata signature
+    ) external onlyOwner whenNotPaused nonReentrant {
+        // Validate deadline
+        if (block.timestamp > deadline) revert ExpiredDeadline();
+        if (deadline > block.timestamp + MAX_DEADLINE_EXTENSION) revert DeadlineTooFar();
+
+        // Validate nonce
+        uint256 expectedNonce = nonces[creator];
+        if (nonce != expectedNonce) revert InvalidNonce(expectedNonce, nonce);
+
+        // Verify signature
+        bytes32 structHash = keccak256(
+            abi.encode(REVENUE_DECRYPT_TYPEHASH, creator, nonce, deadline)
+        );
+        bytes32 digest = _hashTypedDataV4(structHash);
+
+        bytes32 signatureHash = keccak256(signature);
+        if (usedSignatures[signatureHash]) revert SignatureAlreadyUsed();
+
+        address recoveredSigner = digest.recover(signature);
+        if (recoveredSigner != creator) revert InvalidSignature();
+
+        // Update state
+        usedSignatures[signatureHash] = true;
+        nonces[creator] = expectedNonce + 1;
+        totalRelayed++;
+
+        // Forward to subscription contract
+        subscriptionContract.relayRequestRevenueDecrypt(creator);
+
+        emit RevenueDecryptRelayed(creator, block.timestamp);
+    }
+
+    /**
+     * @notice Relay a withdrawal request on behalf of a creator
+     * @dev Protects creator privacy by hiding their wallet from on-chain trace
+     * @param creator The creator's address
+     * @param deadline Unix timestamp after which signature is invalid
+     * @param nonce Anti-replay nonce
+     * @param signature EIP-712 signature from the creator
+     */
+    function relayWithdraw(
+        address creator,
+        uint256 deadline,
+        uint256 nonce,
+        bytes calldata signature
+    ) external onlyOwner whenNotPaused nonReentrant {
+        // Validate deadline
+        if (block.timestamp > deadline) revert ExpiredDeadline();
+        if (deadline > block.timestamp + MAX_DEADLINE_EXTENSION) revert DeadlineTooFar();
+
+        // Validate nonce
+        uint256 expectedNonce = nonces[creator];
+        if (nonce != expectedNonce) revert InvalidNonce(expectedNonce, nonce);
+
+        // Verify signature
+        bytes32 structHash = keccak256(
+            abi.encode(WITHDRAW_TYPEHASH, creator, nonce, deadline)
+        );
+        bytes32 digest = _hashTypedDataV4(structHash);
+
+        bytes32 signatureHash = keccak256(signature);
+        if (usedSignatures[signatureHash]) revert SignatureAlreadyUsed();
+
+        address recoveredSigner = digest.recover(signature);
+        if (recoveredSigner != creator) revert InvalidSignature();
+
+        // Update state
+        usedSignatures[signatureHash] = true;
+        nonces[creator] = expectedNonce + 1;
+        totalRelayed++;
+
+        // Forward to subscription contract
+        subscriptionContract.relayWithdrawRevenue(creator);
+
+        emit WithdrawRelayed(creator, block.timestamp);
+    }
+
+    /**
      * @notice Get the current nonce for a subscriber
      * @param subscriber Address to check
      * @return Current nonce value
@@ -365,6 +569,62 @@ contract OnlyFHERelayer is EIP712, Ownable, ReentrancyGuard {
     ) external view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(SUBSCRIBE_TYPEHASH, creator, subscriber, nonce, deadline)
+        );
+        return _hashTypedDataV4(structHash);
+    }
+
+    /**
+     * @notice Compute the EIP-712 digest for access decrypt
+     * @param creator Creator address
+     * @param subscriber Subscriber address
+     * @param nonce Nonce value
+     * @param deadline Deadline timestamp
+     * @return The EIP-712 digest to sign
+     */
+    function getAccessDecryptDigest(
+        address creator,
+        address subscriber,
+        uint256 nonce,
+        uint256 deadline
+    ) external view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(ACCESS_DECRYPT_TYPEHASH, creator, subscriber, nonce, deadline)
+        );
+        return _hashTypedDataV4(structHash);
+    }
+
+    /**
+     * @notice Compute the EIP-712 digest for revenue decrypt
+     * @param creator Creator address
+     * @param nonce Nonce value
+     * @param deadline Deadline timestamp
+     * @return The EIP-712 digest to sign
+     */
+    function getRevenueDecryptDigest(
+        address creator,
+        uint256 nonce,
+        uint256 deadline
+    ) external view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(REVENUE_DECRYPT_TYPEHASH, creator, nonce, deadline)
+        );
+        return _hashTypedDataV4(structHash);
+    }
+
+    /**
+     * @notice Compute the EIP-712 digest for withdraw
+     * @param creator Creator address
+     * @param nonce Nonce value
+     * @param deadline Deadline timestamp
+     * @return The EIP-712 digest to sign
+     */
+    function getWithdrawDigest(
+        address creator,
+        uint256 nonce,
+        uint256 deadline
+    ) external view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(WITHDRAW_TYPEHASH, creator, nonce, deadline)
         );
         return _hashTypedDataV4(structHash);
     }
