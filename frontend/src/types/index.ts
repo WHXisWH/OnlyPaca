@@ -1,3 +1,26 @@
+export type CreatorDeliveryMethod =
+  | "direct-link"
+  | "folder"
+  | "drop"
+  | "vault"
+  | "livestream";
+
+export interface CreatorSocialLinks {
+  twitter?: string;
+  instagram?: string;
+  website?: string;
+}
+
+export interface CreatorContentProfile {
+  title?: string;
+  summary?: string;
+  previewNote?: string;
+  deliveryMethod?: CreatorDeliveryMethod;
+  accessInstructions?: string;
+  cadence?: string;
+  category?: string;
+}
+
 // Creator profile from API/contract
 export interface Creator {
   address: string;
@@ -11,11 +34,8 @@ export interface Creator {
   payoutAddress: string;
   contentURI: string;
   contentURL?: string; // parsed from contentURI JSON
-  socialLinks?: {
-    twitter?: string;
-    instagram?: string;
-    website?: string;
-  };
+  socialLinks?: CreatorSocialLinks;
+  contentProfile?: CreatorContentProfile;
 }
 
 // Subscription status
@@ -47,11 +67,9 @@ export interface CreatorMetadata {
   bio: string;
   avatar?: string;
   banner?: string;
-  socialLinks?: {
-    twitter?: string;
-    instagram?: string;
-    website?: string;
-  };
+  socialLinks?: CreatorSocialLinks;
+  contentURL?: string;
+  contentProfile?: CreatorContentProfile;
 }
 
 // EIP-712 typed data for subscription

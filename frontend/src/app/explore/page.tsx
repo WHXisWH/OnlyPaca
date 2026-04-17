@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CreatorCard } from "@/components/CreatorCard";
 import { useCreators } from "@/hooks/useCreators";
+import { SystemStatusPanel } from "@/components/SystemStatusPanel";
 
 export default function ExplorePage() {
   const { creators, isLoading, error } = useCreators();
@@ -38,6 +39,14 @@ export default function ExplorePage() {
               Discover amazing creators and subscribe with complete privacy.
               Your subscription relationships are encrypted on-chain.
             </p>
+          </div>
+
+          <div className="mb-8">
+            <SystemStatusPanel
+              compact
+              title="Private Flow Readiness"
+              description="Quick live check before you subscribe: relayer reachability, contract readiness, and wallet network alignment."
+            />
           </div>
 
           {/* Search and Filter */}

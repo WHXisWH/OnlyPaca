@@ -13,7 +13,27 @@ interface SubscribeModalProps {
   onSuccess?: () => void;
 }
 
-export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: SubscribeModalProps) {
+const privateFacts = [
+  {
+    title: "Your wallet does not call the subscription contract",
+    body: "You sign an EIP-712 authorization off-chain. The relayer pays gas and submits the actual transaction.",
+  },
+  {
+    title: "The subscription edge is encrypted at rest",
+    body: "The contract stores your access state as FHE ciphertext, so storage inspection does not reveal who you subscribed to.",
+  },
+  {
+    title: "Unlocking content is a separate verification step",
+    body: "After relay succeeds, you still need an FHE access check. Only your wallet can trigger and read that result.",
+  },
+];
+
+export function SubscribeModal({
+  isOpen,
+  onClose,
+  creator,
+  onSuccess,
+}: SubscribeModalProps) {
   const { isConnected } = useAccount();
   const { subscribe, reset, state, isSigning, isPending, isSuccess, isError } =
     useSubscribe({
@@ -24,7 +44,6 @@ export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: Subscrib
 
   const priceInEth = formatEther(BigInt(creator.subscriptionPrice));
 
-  // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(reset, 300);
@@ -35,7 +54,7 @@ export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: Subscrib
   if (!isOpen) return null;
 
   const handleSubscribe = () => {
-    subscribe(creator.address);
+    subscribe(creator);
   };
 
   const handleClose = () => {
@@ -46,26 +65,18 @@ export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: Subscrib
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/75 backdrop-blur-md"
         onClick={handleClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-md glass rounded-2xl p-6 animate-in fade-in zoom-in duration-200">
-        {/* Close Button */}
+      <div className="relative w-full max-w-2xl glass rounded-[2rem] border border-white/10 p-6 md:p-8 animate-in fade-in zoom-in duration-200">
         {!isSigning && !isPending && (
           <button
             onClick={handleClose}
             className="absolute top-4 right-4 text-dark-400 hover:text-white transition-colors"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -76,16 +87,10 @@ export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: Subscrib
           </button>
         )}
 
-        {/* Success State */}
         {isSuccess && (
-          <div className="text-center py-8">
+          <div className="text-center py-4">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-green-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -94,200 +99,205 @@ export function SubscribeModal({ isOpen, onClose, creator, onSuccess }: Subscrib
                 />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">
-              Subscription Successful!
-            </h3>
-            <p className="text-dark-400 mb-6">
-              You now have access to {creator.name}&apos;s content. Your
-              subscription is encrypted and private.
+
+            <p className="text-primary-300 text-xs uppercase tracking-[0.35em] mb-3">
+              Relay Confirmed
             </p>
+            <h3 className="text-2xl font-bold text-white mb-3">
+              Private subscription recorded.
+            </h3>
+            <p className="text-dark-300 max-w-lg mx-auto">
+              The relayer submitted your subscription for {creator.name}. This is not the final
+              unlock step yet. Head back to the creator page or your Private Vault and run
+              access verification to trigger FHE decryption.
+            </p>
+
             {state.status === "success" && (
               <a
                 href={`https://sepolia.arbiscan.io/tx/${state.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary-400 hover:text-primary-300 text-sm"
+                className="inline-flex items-center gap-2 mt-5 text-primary-400 hover:text-primary-300 text-sm"
               >
-                View transaction →
-              </a>
-            )}
-            <button
-              onClick={onClose}
-              className="mt-6 w-full px-6 py-3 bg-primary-500 rounded-xl font-semibold text-white hover:bg-primary-600 transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        )}
-
-        {/* Error State */}
-        {isError && (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">Subscription Failed</h3>
-            <div className="text-dark-400 text-sm mb-4 text-left p-4 bg-dark-800/50 rounded-xl">
-              {state.status === "error" ? (
-                <>
-                  <p className="mb-2">{state.error}</p>
-                  {state.error?.includes("nonce") && (
-                    <p className="text-yellow-400 text-xs">The signature nonce was invalid. Please try again.</p>
-                  )}
-                  {state.error?.includes("deadline") && (
-                    <p className="text-yellow-400 text-xs">The signature expired. Please try again quickly.</p>
-                  )}
-                  {state.error?.includes("relayer") && (
-                    <p className="text-yellow-400 text-xs">The relayer service is temporarily unavailable. Try again in a moment.</p>
-                  )}
-                  {(state.error?.includes("network") || state.error?.includes("fetch")) && (
-                    <p className="text-yellow-400 text-xs">Network error — check your connection and try again.</p>
-                  )}
-                  {state.error?.includes("rejected") && (
-                    <p className="text-yellow-400 text-xs">You rejected the signature request. Click Try Again to sign.</p>
-                  )}
-                </>
-              ) : (
-                <p>An unexpected error occurred. Please try again.</p>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={reset} className="flex-1 px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors">
-                Try Again
-              </button>
-              <button onClick={onClose} className="flex-1 px-6 py-3 bg-dark-700 rounded-xl font-semibold text-white hover:bg-dark-600 transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Default State */}
-        {!isSuccess && !isError && (
-          <>
-            {/* Header */}
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-white">
-                Subscribe to {creator.name}
-              </h2>
-              <p className="text-dark-400 mt-1">
-                Unlock exclusive content with complete privacy
-              </p>
-            </div>
-
-            {/* Creator Info */}
-            <div className="flex items-center gap-4 p-4 bg-dark-800/50 rounded-xl mb-6">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-                {creator.avatar ? (
-                  <img
-                    src={creator.avatar}
-                    alt={creator.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                ) : (
-                  <span className="text-white font-bold text-lg">
-                    {creator.name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white font-semibold truncate">
-                  {creator.name}
-                </div>
-                <div className="text-dark-400 text-sm">
-                  {creator.subscriberCount} subscribers
-                </div>
-              </div>
-            </div>
-
-            {/* Price */}
-            <div className="flex items-center justify-between p-4 bg-dark-800/50 rounded-xl mb-6">
-              <span className="text-dark-300">Subscription Price</span>
-              <span className="text-xl font-bold text-white">
-                {parseFloat(priceInEth).toFixed(4)} ETH
-              </span>
-            </div>
-
-            {/* Privacy Info */}
-            <div className="p-4 bg-primary-500/10 border border-primary-500/30 rounded-xl mb-6">
-              <div className="flex items-start gap-3">
-                <svg
-                  className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                View relay transaction
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    d="M14 3h7m0 0v7m0-7L10 14"
                   />
                 </svg>
-                <div className="text-sm">
-                  <span className="text-primary-400 font-semibold">
-                    Privacy Protected:{" "}
-                  </span>
-                  <span className="text-dark-300">
-                    Your subscription is encrypted on-chain. No one can link your
-                    wallet to this creator.
-                  </span>
+              </a>
+            )}
+
+            <div className="grid sm:grid-cols-3 gap-3 mt-8 text-left">
+              {[
+                "Authorization signed in wallet",
+                "Relayer paid gas and called the contract",
+                "Next: run FHE access verification",
+              ].map((item, index) => (
+                <div key={item} className="rounded-2xl border border-white/10 bg-dark-900/50 p-4">
+                  <div className="text-primary-400 text-xs font-semibold mb-2">0{index + 1}</div>
+                  <div className="text-sm text-dark-200">{item}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+              <button
+                onClick={onClose}
+                className="flex-1 px-6 py-3 bg-primary-500 rounded-xl font-semibold text-white hover:bg-primary-600 transition-colors"
+              >
+                Return to Creator
+              </button>
+              <a
+                href="/dashboard/subscriptions"
+                className="flex-1 px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors"
+              >
+                Open Private Vault
+              </a>
+            </div>
+          </div>
+        )}
+
+        {isError && (
+          <div className="text-center py-4">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Relay failed</h3>
+            <div className="text-dark-300 text-sm mb-5 text-left p-4 bg-dark-900/60 rounded-2xl border border-white/5">
+              {state.status === "error" ? state.error : "An unexpected error occurred."}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={reset}
+                className="flex-1 px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 px-6 py-3 bg-dark-700 rounded-xl font-semibold text-white hover:bg-dark-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isSuccess && !isError && (
+          <>
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="md:w-[42%]">
+                <p className="text-primary-300 text-xs uppercase tracking-[0.35em] mb-3">
+                  Private Checkout
+                </p>
+                <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
+                  Subscribe to {creator.name} without exposing the relationship on-chain.
+                </h2>
+                <p className="text-dark-300 mt-4">
+                  OnlyPaca uses a relayer plus Fhenix CoFHE, so your address does not directly
+                  show up as the caller of the subscription contract.
+                </p>
+
+                <div className="mt-6 rounded-3xl border border-primary-500/20 bg-primary-500/10 p-5">
+                  <div className="text-dark-300 text-sm">Subscription price</div>
+                  <div className="text-3xl font-bold text-white mt-1">
+                    {Number.parseFloat(priceInEth).toFixed(4)} ETH
+                  </div>
+                  <div className="text-xs text-dark-400 mt-2">
+                    Creator receives 95%. Platform fee is capped at 5% in the current flow.
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:flex-1 space-y-4">
+                <div className="rounded-3xl border border-white/10 bg-dark-900/50 p-5">
+                  <div className="text-white font-semibold">What happens next</div>
+                  <div className="space-y-3 mt-4">
+                    {[
+                      {
+                        step: "01",
+                        title: "Sign an off-chain authorization",
+                        body: "Your wallet signs typed data. No direct contract call happens from your address.",
+                      },
+                      {
+                        step: "02",
+                        title: "Relayer broadcasts and pays gas",
+                        body: "The backend submits the transaction and funds the payment side of the flow.",
+                      },
+                      {
+                        step: "03",
+                        title: "Verify access separately",
+                        body: "Because decryption is asynchronous on CoFHE, unlocking content is a second explicit action.",
+                      },
+                    ].map((item) => (
+                      <div key={item.step} className="flex gap-3">
+                        <div className="w-9 h-9 rounded-2xl bg-primary-500/15 border border-primary-500/25 flex items-center justify-center text-primary-300 text-xs font-semibold flex-shrink-0">
+                          {item.step}
+                        </div>
+                        <div>
+                          <div className="text-white text-sm font-semibold">{item.title}</div>
+                          <div className="text-dark-400 text-sm mt-1">{item.body}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-dark-900/50 p-5">
+                  <div className="text-white font-semibold">Privacy boundaries</div>
+                  <div className="space-y-3 mt-4">
+                    {privateFacts.map((fact) => (
+                      <div key={fact.title}>
+                        <div className="text-sm text-white">{fact.title}</div>
+                        <div className="text-sm text-dark-400 mt-1">{fact.body}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 mt-8">
               <button
                 onClick={handleSubscribe}
                 disabled={!isConnected || isSigning || isPending}
-                className="w-full px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-500 rounded-xl font-semibold text-white glow-hover transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+                className="w-full px-6 py-4 bg-gradient-to-r from-primary-600 to-primary-500 rounded-2xl font-semibold text-white glow-hover transition-all hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               >
                 {isSigning && (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Sign Message...</span>
+                    <span>Awaiting signature...</span>
                   </>
                 )}
                 {isPending && (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Processing...</span>
+                    <span>Relaying transaction...</span>
                   </>
                 )}
                 {!isSigning && !isPending && (
-                  <span>Subscribe for {parseFloat(priceInEth).toFixed(4)} ETH</span>
+                  <span>Authorize private subscription</span>
                 )}
               </button>
 
               <button
                 onClick={handleClose}
                 disabled={isSigning || isPending}
-                className="w-full px-6 py-3 glass rounded-xl font-semibold text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                className="w-full px-6 py-3 glass rounded-2xl font-semibold text-white hover:bg-white/10 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
-            </div>
-
-            {/* How it works */}
-            <div className="mt-6 pt-6 border-t border-dark-700">
-              <h4 className="text-sm font-semibold text-white mb-3">What happens when you click Subscribe:</h4>
-              <ol className="text-sm text-dark-400 space-y-3">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold flex-shrink-0">1.</span>
-                  <span>You sign a message in your wallet — <strong className="text-white">no gas, no on-chain trace</strong> from your address.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold flex-shrink-0">2.</span>
-                  <span>The platform relayer submits the transaction and pays gas on your behalf. The subscription fee is included.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary-400 font-semibold flex-shrink-0">3.</span>
-                  <span>Your subscription status is <strong className="text-white">encrypted on-chain via FHE</strong> — only you can ever verify it.</span>
-                </li>
-              </ol>
             </div>
           </>
         )}

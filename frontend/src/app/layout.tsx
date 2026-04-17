@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono-display",
+});
 
 export const metadata: Metadata = {
-  title: "OnlyPaca — Your secret, encrypted.",
+  title: "OnlyPaca | Private creator subscriptions on Fhenix",
   description:
-    "The first adult content platform where subscriptions are mathematically private. Powered by Fully Homomorphic Encryption on Arbitrum.",
+    "OnlyPaca turns Fhenix CoFHE into a full creator subscription journey with relay checkout, encrypted access state, and private revenue visibility.",
 };
 
 export default function RootLayout({
@@ -18,7 +27,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-dark-950 text-white`}>
+      <body
+        className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} bg-dark-950 text-white`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>

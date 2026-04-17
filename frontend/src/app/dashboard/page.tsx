@@ -55,7 +55,7 @@ export default function DashboardPage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-white">Dashboard</h1>
             <p className="text-dark-400 mt-2">
-              Manage your subscriptions and creator profile
+              Choose the fan-side Private Vault or the creator-side studio.
             </p>
           </div>
 
@@ -86,14 +86,14 @@ export default function DashboardPage() {
                   </svg>
                 </div>
                 <h2 className="text-xl font-semibold text-white mb-2">
-                  My Subscriptions
+                  Private Vault
                 </h2>
                 <p className="text-dark-400">
-                  View and manage your active subscriptions. Verify your access
-                  to creator content.
+                  Browser-private memory of your relay flow plus on-demand FHE
+                  access verification.
                 </p>
                 <div className="mt-4 flex items-center text-primary-400 text-sm font-semibold">
-                  View Subscriptions
+                  Open Private Vault
                   <svg
                     className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
                     fill="none"
@@ -130,14 +130,14 @@ export default function DashboardPage() {
                   </svg>
                 </div>
                 <h2 className="text-xl font-semibold text-white mb-2">
-                  Creator Dashboard
+                  Creator Studio
                 </h2>
                 <p className="text-dark-400">
-                  Register as a creator, view your encrypted earnings, and
-                  manage withdrawals.
+                  Register, manage pricing and content delivery, privately
+                  reveal revenue, and withdraw.
                 </p>
                 <div className="mt-4 flex items-center text-purple-400 text-sm font-semibold">
-                  Manage Creator Profile
+                  Open Creator Studio
                   <svg
                     className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
                     fill="none"

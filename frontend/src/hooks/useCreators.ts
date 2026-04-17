@@ -3,45 +3,9 @@
 import { useState, useEffect } from "react";
 import { Creator } from "@/types";
 import { API_ENDPOINTS } from "@/config/wagmi";
+import { parseCreatorData } from "@/lib/creatorMetadata";
 
-// Parse a raw creator object from the API into a typed Creator
-export function parseCreatorData(raw: {
-  address: string;
-  subscriberCount: string;
-  subscriptionPrice: string;
-  subscriptionDuration?: string;
-  payoutAddress: string;
-  contentURI: string;
-}): Creator {
-  let name = raw.address.slice(0, 6) + "..." + raw.address.slice(-4);
-  let bio = "";
-  let contentURL = "";
-
-  try {
-    const meta = JSON.parse(raw.contentURI);
-    if (meta.name) name = meta.name;
-    if (meta.bio) bio = meta.bio;
-    if (meta.contentURL) contentURL = meta.contentURL;
-  } catch {
-    // Legacy: contentURI is a plain string, not JSON
-    if (raw.contentURI && !raw.contentURI.startsWith("{")) {
-      const parts = raw.contentURI.split("/");
-      name = decodeURIComponent(parts[parts.length - 1] || name);
-    }
-  }
-
-  return {
-    address: raw.address,
-    name,
-    bio,
-    subscriberCount: raw.subscriberCount,
-    subscriptionPrice: raw.subscriptionPrice,
-    subscriptionDuration: raw.subscriptionDuration || "2592000",
-    payoutAddress: raw.payoutAddress,
-    contentURI: raw.contentURI,
-    contentURL,
-  };
-}
+export { parseCreatorData };
 
 export function useCreators() {
   const [creators, setCreators] = useState<Creator[]>([]);

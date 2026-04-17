@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useReadContract, usePublicClient, useSignTypedData } from "wagmi";
+import {
+  useAccount,
+  useWriteContract,
+  useReadContract,
+  usePublicClient,
+  useSignTypedData,
+} from "wagmi";
 import { SUBSCRIPTION_ABI } from "@/config/contracts";
 import { CONTRACT_ADDRESSES, API_ENDPOINTS } from "@/config/wagmi";
-import { Creator } from "@/types";
+import {
+  Creator,
+  CreatorContentProfile,
+  CreatorSocialLinks,
+} from "@/types";
+import { buildCreatorMetadata, parseCreatorData } from "@/lib/creatorMetadata";
 
-// EIP-712 type definitions for relayer operations
 const REVENUE_DECRYPT_TYPES = {
   RevenueDecrypt: [
     { name: "creator", type: "address" },
@@ -23,12 +33,17 @@ const WITHDRAW_TYPES = {
   ],
 } as const;
 
-interface RegisterParams {
+export interface RegisterParams {
   name: string;
   bio: string;
   contentURL: string;
   subscriptionPrice: bigint;
+  subscriptionDurationDays: number;
   payoutAddress: `0x${string}`;
+  avatar?: string;
+  banner?: string;
+  socialLinks?: CreatorSocialLinks;
+  contentProfile?: CreatorContentProfile;
 }
 
 export function useCreatorDashboard() {
@@ -59,38 +74,27 @@ export function useCreatorDashboard() {
   useEffect(() => {
     setIsLoading(true);
 
-    if (creatorData) {
-      const [registered, subscriberCount, subscriptionPrice, subscriptionDuration, payoutAddress, contentURI] =
-        creatorData as [boolean, bigint, bigint, bigint, `0x${string}`, string];
+    if (creatorData && address) {
+      const [
+        registered,
+        subscriberCount,
+        subscriptionPrice,
+        subscriptionDuration,
+        payoutAddress,
+        contentURI,
+      ] = creatorData as [boolean, bigint, bigint, bigint, `0x${string}`, string];
 
       if (registered) {
-        let name = "Creator";
-        let bio = "";
-        let contentURL = "";
-
-        try {
-          const meta = JSON.parse(contentURI);
-          if (meta.name) name = meta.name;
-          if (meta.bio) bio = meta.bio;
-          if (meta.contentURL) contentURL = meta.contentURL;
-        } catch {
-          if (contentURI && !contentURI.startsWith("{")) {
-            const parts = contentURI.split("/");
-            name = decodeURIComponent(parts[parts.length - 1] || "Creator");
-          }
-        }
-
-        setProfile({
-          address: address!,
-          name,
-          bio,
-          subscriberCount: subscriberCount.toString(),
-          subscriptionPrice: subscriptionPrice.toString(),
-          subscriptionDuration: subscriptionDuration.toString(),
-          payoutAddress,
-          contentURI,
-          contentURL,
-        });
+        setProfile(
+          parseCreatorData({
+            address,
+            subscriberCount: subscriberCount.toString(),
+            subscriptionPrice: subscriptionPrice.toString(),
+            subscriptionDuration: subscriptionDuration.toString(),
+            payoutAddress,
+            contentURI,
+          })
+        );
         setIsRegistered(true);
       } else {
         setIsRegistered(false);
@@ -111,11 +115,14 @@ export function useCreatorDashboard() {
       setIsRegistering(true);
 
       try {
-        // Store metadata as JSON in contentURI
-        const contentURI = JSON.stringify({
+        const contentURI = buildCreatorMetadata({
           name: params.name,
           bio: params.bio,
           contentURL: params.contentURL,
+          avatar: params.avatar,
+          banner: params.banner,
+          socialLinks: params.socialLinks,
+          contentProfile: params.contentProfile,
         });
 
         await writeContractAsync({
@@ -124,7 +131,7 @@ export function useCreatorDashboard() {
           functionName: "registerCreator",
           args: [
             params.subscriptionPrice,
-            BigInt(30 * 24 * 60 * 60), // 30 days
+            BigInt(Math.max(1, params.subscriptionDurationDays) * 24 * 60 * 60),
             params.payoutAddress,
             contentURI,
           ],
@@ -148,10 +155,14 @@ export function useCreatorDashboard() {
       setIsRegistering(true);
 
       try {
-        const contentURI = JSON.stringify({
+        const contentURI = buildCreatorMetadata({
           name: params.name,
           bio: params.bio,
           contentURL: params.contentURL,
+          avatar: params.avatar,
+          banner: params.banner,
+          socialLinks: params.socialLinks,
+          contentProfile: params.contentProfile,
         });
 
         await writeContractAsync({
@@ -160,7 +171,7 @@ export function useCreatorDashboard() {
           functionName: "updateCreatorProfile",
           args: [
             params.subscriptionPrice,
-            BigInt(30 * 24 * 60 * 60),
+            BigInt(Math.max(1, params.subscriptionDurationDays) * 24 * 60 * 60),
             params.payoutAddress,
             contentURI,
           ],
@@ -177,7 +188,6 @@ export function useCreatorDashboard() {
     [address, writeContractAsync, refetchProfile]
   );
 
-  // Request revenue decryption via Relayer (privacy-preserving)
   const requestRevenueDecrypt = useCallback(async () => {
     if (!address || !publicClient) return;
 
@@ -185,21 +195,15 @@ export function useCreatorDashboard() {
     setRevenueDecryptStep("Signing request...");
 
     try {
-      // 1. Get nonce from relayer
-      const nonceResponse = await fetch(
-        `${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`
-      );
+      const nonceResponse = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`);
 
       if (!nonceResponse.ok) {
         throw new Error("Failed to get nonce");
       }
 
       const { nonce } = await nonceResponse.json();
-
-      // 2. Calculate deadline (1 hour from now)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
-      // 3. Sign EIP-712 message
       const signature = await signTypedDataAsync({
         domain: {
           name: "OnlyFHERelayer",
@@ -218,7 +222,6 @@ export function useCreatorDashboard() {
 
       setRevenueDecryptStep("Sending to relayer...");
 
-      // 4. Send to relayer
       const response = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/revenue-decrypt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -235,14 +238,13 @@ export function useCreatorDashboard() {
         throw new Error(error.message || "Revenue decrypt failed");
       }
 
-      setRevenueDecryptStep("Waiting for FHE decryption (~5–30s)...");
+      setRevenueDecryptStep("Waiting for FHE decryption (~5-30s)...");
 
-      // Poll isRevenueDecryptReady() up to 60 seconds
       let attempts = 0;
       const maxAttempts = 15;
 
       while (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((resolve) => setTimeout(resolve, 4000));
 
         try {
           const result = await publicClient.readContract({
@@ -261,10 +263,10 @@ export function useCreatorDashboard() {
             return;
           }
         } catch {
-          // poll failure — keep trying
+          // Poll failure - keep trying.
         }
 
-        attempts++;
+        attempts += 1;
       }
 
       setRevenueDecryptStep("Timed out. Please try again.");
@@ -277,28 +279,21 @@ export function useCreatorDashboard() {
     }
   }, [address, publicClient, signTypedDataAsync]);
 
-  // Withdraw revenue via Relayer (privacy-preserving)
   const withdrawRevenue = useCallback(async () => {
     if (!address || revenue === null || revenue === BigInt(0)) return;
 
     setIsWithdrawing(true);
 
     try {
-      // 1. Get nonce from relayer
-      const nonceResponse = await fetch(
-        `${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`
-      );
+      const nonceResponse = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/nonce/${address}`);
 
       if (!nonceResponse.ok) {
         throw new Error("Failed to get nonce");
       }
 
       const { nonce } = await nonceResponse.json();
-
-      // 2. Calculate deadline (1 hour from now)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
-      // 3. Sign EIP-712 message
       const signature = await signTypedDataAsync({
         domain: {
           name: "OnlyFHERelayer",
@@ -315,7 +310,6 @@ export function useCreatorDashboard() {
         },
       });
 
-      // 4. Send to relayer
       const response = await fetch(`${API_ENDPOINTS.relayer}/api/subscribe/withdraw`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -2,8 +2,9 @@
 
 import { useState, useCallback } from "react";
 import { useAccount, useSignTypedData } from "wagmi";
-import { TransactionState } from "@/types";
+import { Creator, TransactionState } from "@/types";
 import { API_ENDPOINTS, CONTRACT_ADDRESSES } from "@/config/wagmi";
+import { upsertPrivateVaultEntry } from "@/lib/privateVault";
 
 const SUBSCRIBE_TYPES = {
   Subscribe: [
@@ -26,7 +27,10 @@ export function useSubscribe(options?: UseSubscribeOptions) {
   const [state, setState] = useState<TransactionState>({ status: "idle" });
 
   const subscribe = useCallback(
-    async (creatorAddress: string) => {
+    async (creator: Pick<
+      Creator,
+      "address" | "name" | "bio" | "avatar" | "subscriptionPrice" | "contentURL"
+    >) => {
       if (!address) {
         setState({ status: "error", error: "Wallet not connected" });
         options?.onError?.("Wallet not connected");
@@ -61,7 +65,7 @@ export function useSubscribe(options?: UseSubscribeOptions) {
           types: SUBSCRIBE_TYPES,
           primaryType: "Subscribe",
           message: {
-            creator: creatorAddress as `0x${string}`,
+            creator: creator.address as `0x${string}`,
             subscriber: address,
             nonce: BigInt(nonce),
             deadline,
@@ -75,7 +79,7 @@ export function useSubscribe(options?: UseSubscribeOptions) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            creator: creatorAddress,
+            creator: creator.address,
             subscriber: address,
             deadline: deadline.toString(),
             nonce: nonce.toString(),
@@ -90,20 +94,18 @@ export function useSubscribe(options?: UseSubscribeOptions) {
 
         const result = await response.json();
 
-        // Persist subscription to localStorage so it appears in My Subscriptions
-        try {
-          const key = `onlypaca_subs_${address.toLowerCase()}`;
-          const existing: string[] = JSON.parse(localStorage.getItem(key) || "[]");
-          if (!existing.includes(creatorAddress.toLowerCase())) {
-            existing.push(creatorAddress.toLowerCase());
-            localStorage.setItem(key, JSON.stringify(existing));
-          }
-          // Store timestamp
-          localStorage.setItem(
-            `onlypaca_subtime_${address.toLowerCase()}_${creatorAddress.toLowerCase()}`,
-            new Date().toISOString()
-          );
-        } catch { /* localStorage may be unavailable */ }
+        upsertPrivateVaultEntry(address, {
+          creatorAddress: creator.address,
+          creatorName: creator.name,
+          creatorBio: creator.bio,
+          creatorAvatar: creator.avatar,
+          subscriptionPrice: creator.subscriptionPrice,
+          contentURL: creator.contentURL,
+          txHash: result.transactionHash,
+          relayedAt: new Date().toISOString(),
+          subscribedAt: new Date().toISOString(),
+          stage: "relay-submitted",
+        });
 
         setState({ status: "success", hash: result.transactionHash });
         options?.onSuccess?.(result.transactionHash);

@@ -48,6 +48,14 @@ export function CreatorCard({ creator }: CreatorCardProps) {
 
         {/* Content */}
         <div className="pt-10 pb-4 px-4">
+          {creator.contentProfile?.category && (
+            <div className="mb-3">
+              <span className="px-2.5 py-1 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-300 text-xs">
+                {creator.contentProfile.category}
+              </span>
+            </div>
+          )}
+
           {/* Name */}
           <h3 className="text-lg font-semibold text-white truncate">
             {creator.name}
@@ -57,6 +65,12 @@ export function CreatorCard({ creator }: CreatorCardProps) {
           <p className="text-dark-400 text-sm mt-1 line-clamp-2 h-10">
             {creator.bio || "No bio yet"}
           </p>
+
+          {creator.contentProfile?.previewNote && (
+            <p className="text-dark-500 text-xs mt-3 line-clamp-2 min-h-8">
+              {creator.contentProfile.previewNote}
+            </p>
+          )}
 
           {/* Stats */}
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-dark-700">

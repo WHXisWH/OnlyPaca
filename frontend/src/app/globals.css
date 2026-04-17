@@ -4,19 +4,24 @@
 
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 2, 6, 23;
+  --background-start-rgb: 6, 10, 25;
   --background-end-rgb: 15, 23, 42;
+  --background-accent-rgb: 127, 29, 29;
 }
 
 body {
+  font-family: var(--font-display), sans-serif;
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background:
+    radial-gradient(circle at top left, rgba(var(--background-accent-rgb), 0.28), transparent 28%),
+    radial-gradient(circle at 85% 10%, rgba(217, 119, 6, 0.12), transparent 22%),
+    linear-gradient(180deg, rgb(var(--background-start-rgb)) 0%, rgb(var(--background-end-rgb)) 100%);
   min-height: 100vh;
+}
+
+code,
+.font-mono {
+  font-family: var(--font-mono-display), monospace;
 }
 
 /* Custom scrollbar */
@@ -39,14 +44,15 @@ body {
 
 /* Glass morphism effect */
 .glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.03));
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 70px rgba(0, 0, 0, 0.18);
 }
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #ff1a6c 0%, #ff8fb8 60%, #ffb3cc 100%);
+  background: linear-gradient(135deg, #fb7185 0%, #fb923c 48%, #fde68a 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -54,13 +60,13 @@ body {
 
 /* Glow effect */
 .glow {
-  box-shadow: 0 0 20px rgba(255, 26, 108, 0.3),
-    0 0 40px rgba(255, 26, 108, 0.1);
+  box-shadow: 0 0 20px rgba(251, 113, 133, 0.28),
+    0 0 40px rgba(251, 146, 60, 0.12);
 }
 
 .glow-hover:hover {
-  box-shadow: 0 0 30px rgba(255, 26, 108, 0.45),
-    0 0 60px rgba(255, 26, 108, 0.2);
+  box-shadow: 0 0 30px rgba(251, 113, 133, 0.38),
+    0 0 60px rgba(251, 146, 60, 0.18);
 }
 
 /* Animations */

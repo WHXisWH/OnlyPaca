@@ -7,46 +7,25 @@ import { CONTRACT_ADDRESSES } from "@/config/wagmi";
 import { SubscriptionStatus } from "@/types";
 import { parseCreatorData } from "./useCreators";
 import { API_ENDPOINTS } from "@/config/wagmi";
+import {
+  getVaultStatusCopy,
+  migrateLegacyVault,
+  readPrivateVault,
+  updatePrivateVaultVerification,
+} from "@/lib/privateVault";
 
 interface Subscription {
   creatorAddress: string;
   creatorName: string;
+  creatorBio?: string;
   creatorAvatar?: string;
+  subscriptionPrice?: string;
+  contentURL?: string;
   status: SubscriptionStatus | null;
   subscribedAt?: string;
-}
-
-// ---- localStorage helpers ----
-
-function getStoredCreatorAddresses(userAddress: string): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(`onlypaca_subs_${userAddress.toLowerCase()}`) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function getStoredSubTime(userAddress: string, creatorAddress: string): string | undefined {
-  try {
-    return localStorage.getItem(`onlypaca_subtime_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`) || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function getStoredVerifiedStatus(userAddress: string, creatorAddress: string): SubscriptionStatus | null {
-  try {
-    const val = localStorage.getItem(`onlypaca_verified_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`);
-    return val !== null ? (parseInt(val) as SubscriptionStatus) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setStoredVerifiedStatus(userAddress: string, creatorAddress: string, status: SubscriptionStatus) {
-  try {
-    localStorage.setItem(`onlypaca_verified_${userAddress.toLowerCase()}_${creatorAddress.toLowerCase()}`, status.toString());
-  } catch {}
+  txHash?: string;
+  statusLabel: string;
+  statusHelper: string;
 }
 
 // ---- hook ----
@@ -72,32 +51,50 @@ export function useSubscriptions() {
       setIsLoading(true);
 
       try {
-        const creatorAddresses = getStoredCreatorAddresses(address);
+        migrateLegacyVault(address);
+        const vaultEntries = readPrivateVault(address);
 
-        if (creatorAddresses.length === 0) {
+        if (vaultEntries.length === 0) {
           setSubscriptions([]);
           setIsLoading(false);
           return;
         }
 
         const subs: Subscription[] = await Promise.all(
-          creatorAddresses.map(async (creatorAddr) => {
-            let creatorName = creatorAddr.slice(0, 6) + "..." + creatorAddr.slice(-4);
+          vaultEntries.map(async (entry) => {
+            let creatorName = entry.creatorName;
+            let creatorBio = entry.creatorBio;
+            let contentURL = entry.contentURL;
+            let subscriptionPrice = entry.subscriptionPrice;
 
             try {
-              const res = await fetch(`${API_ENDPOINTS.relayer}/api/creators/${creatorAddr}`);
+              const res = await fetch(
+                `${API_ENDPOINTS.relayer}/api/creators/${entry.creatorAddress}`
+              );
               if (res.ok) {
                 const data = await res.json();
                 const parsed = parseCreatorData(data.creator);
                 creatorName = parsed.name;
+                creatorBio = parsed.bio;
+                contentURL = parsed.contentURL;
+                subscriptionPrice = parsed.subscriptionPrice;
               }
             } catch { /* use fallback name */ }
 
+            const statusCopy = getVaultStatusCopy(entry.stage, entry.status);
+
             return {
-              creatorAddress: creatorAddr,
+              creatorAddress: entry.creatorAddress,
               creatorName,
-              status: getStoredVerifiedStatus(address, creatorAddr),
-              subscribedAt: getStoredSubTime(address, creatorAddr),
+              creatorBio,
+              creatorAvatar: entry.creatorAvatar,
+              subscriptionPrice,
+              contentURL,
+              status: entry.status,
+              subscribedAt: entry.subscribedAt,
+              txHash: entry.txHash,
+              statusLabel: statusCopy.label,
+              statusHelper: statusCopy.helper,
             };
           })
         );
@@ -129,7 +126,7 @@ export function useSubscriptions() {
           args: [creatorAddress as `0x${string}`],
         });
 
-        setVerifyStep("Waiting for FHE decryption (~5–30s)...");
+        setVerifyStep("Waiting for FHE decryption (~5-30s)...");
 
         let attempts = 0;
         const maxAttempts = 15;
@@ -150,11 +147,27 @@ export function useSubscriptions() {
 
             if (ready) {
               const subStatus = status as SubscriptionStatus;
-              setStoredVerifiedStatus(address, creatorAddress, subStatus);
+              updatePrivateVaultVerification(address, creatorAddress, subStatus);
               setSubscriptions((prev) =>
                 prev.map((sub) =>
                   sub.creatorAddress.toLowerCase() === creatorAddress.toLowerCase()
-                    ? { ...sub, status: subStatus }
+                    ? {
+                        ...sub,
+                        status: subStatus,
+                        ...(() => {
+                          const copy = getVaultStatusCopy(
+                            subStatus === SubscriptionStatus.ACTIVE
+                              ? "verified-active"
+                              : "verified-inactive",
+                            subStatus
+                          );
+
+                          return {
+                            statusLabel: copy.label,
+                            statusHelper: copy.helper,
+                          };
+                        })(),
+                      }
                     : sub
                 )
               );
@@ -166,7 +179,7 @@ export function useSubscriptions() {
           attempts++;
         }
 
-        setVerifyStep("Timed out — please try verifying again.");
+        setVerifyStep("Timed out - please try verifying again.");
         setTimeout(() => setVerifyStep(null), 3000);
       } catch (error: any) {
         console.error("Access verification failed:", error);
@@ -184,5 +197,6 @@ export function useSubscriptions() {
     verifyAccess,
     isVerifying,
     verifyStep,
+    usesPrivateVault: true,
   };
 }

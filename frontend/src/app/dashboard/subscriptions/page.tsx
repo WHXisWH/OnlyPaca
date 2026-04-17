@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import { Header } from "@/components/Header";
@@ -11,7 +10,14 @@ import { SubscriptionCard } from "@/components/SubscriptionCard";
 
 export default function SubscriptionsDashboardPage() {
   const { isConnected } = useAccount();
-  const { subscriptions, isLoading, verifyAccess, isVerifying, verifyStep } = useSubscriptions();
+  const {
+    subscriptions,
+    isLoading,
+    verifyAccess,
+    isVerifying,
+    verifyStep,
+    usesPrivateVault,
+  } = useSubscriptions();
 
   if (!isConnected) {
     return (
@@ -20,12 +26,7 @@ export default function SubscriptionsDashboardPage() {
         <div className="pt-24 pb-20 px-4 sm:px-6 lg:px-8">
           <div className="max-w-md mx-auto text-center">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-dark-800 flex items-center justify-center">
-              <svg
-                className="w-10 h-10 text-dark-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg className="w-10 h-10 text-dark-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -34,11 +35,9 @@ export default function SubscriptionsDashboardPage() {
                 />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-4">
-              Connect Your Wallet
-            </h1>
+            <h1 className="text-2xl font-bold text-white mb-4">Connect Your Wallet</h1>
             <p className="text-dark-400 mb-8">
-              Connect your wallet to view your subscriptions.
+              Connect your wallet to open your Private Vault and verify access.
             </p>
             <ConnectButton />
           </div>
@@ -53,41 +52,71 @@ export default function SubscriptionsDashboardPage() {
       <Header />
 
       <div className="pt-24 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-white">My Subscriptions</h1>
-              <p className="text-dark-400 mt-1">
-                View and verify your subscription access
+              <p className="text-primary-300 text-xs uppercase tracking-[0.35em]">
+                Dashboard
+              </p>
+              <h1 className="text-3xl font-bold text-white mt-3">Private Vault</h1>
+              <p className="text-dark-400 mt-2 max-w-2xl">
+                This page is intentionally not a public subscription index. It is a browser-private
+                workspace that remembers creators you interacted with and lets you re-run FHE access
+                verification on demand.
               </p>
             </div>
             <Link
               href="/explore"
-              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg text-white font-semibold transition-colors"
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-xl text-white font-semibold transition-colors text-center"
             >
-              Find Creators
+              Explore Creators
             </Link>
           </div>
 
-          {/* Verify Access explainer — shown when there are subscriptions */}
-          {!isLoading && subscriptions.length > 0 && (
-            <div className="mb-6 p-4 bg-dark-800/60 border border-dark-700 rounded-xl">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="text-sm">
-                  <span className="text-white font-semibold">How to unlock content: </span>
-                  <span className="text-dark-400">
-                    Click <strong className="text-white">Verify Access</strong> on any subscription. This sends a small gas transaction (~$0.01) that triggers private FHE decryption — only you see the result. It takes 5–30 seconds. After verification, click <strong className="text-white">View Content</strong> to access the creator&apos;s exclusive link.
-                  </span>
-                </div>
+          <div className="grid lg:grid-cols-[1.35fr,0.9fr] gap-4 mb-8">
+            <div className="glass rounded-[2rem] p-6">
+              <h2 className="text-white text-lg font-semibold">Why this page is local-first</h2>
+              <div className="grid md:grid-cols-3 gap-3 mt-5">
+                {[
+                  {
+                    title: "No public subscriber list",
+                    body: "The protocol intentionally omits subscriber identities from events and public views.",
+                  },
+                  {
+                    title: "Your browser remembers your journey",
+                    body: "Successful relay attempts are stored locally so you can continue the unlock flow later.",
+                  },
+                  {
+                    title: "Chain truth still wins",
+                    body: "Every unlock runs a fresh FHE verification against the contract before content opens.",
+                  },
+                ].map((item) => (
+                  <div key={item.title} className="rounded-2xl border border-white/8 bg-dark-900/40 p-4">
+                    <div className="text-white text-sm font-semibold">{item.title}</div>
+                    <div className="text-dark-400 text-sm mt-2">{item.body}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
 
-          {/* Verify step status */}
+            <div className="glass rounded-[2rem] p-6">
+              <h2 className="text-white text-lg font-semibold">Verification loop</h2>
+              <div className="space-y-3 mt-4 text-sm text-dark-300">
+                <div>1. Pick a creator from your Private Vault.</div>
+                <div>2. Sign an access request. No direct contract call from your wallet is shown.</div>
+                <div>3. The relayer submits the request and CoFHE resolves the decrypt asynchronously.</div>
+                <div>4. Only after a successful result do you open the content link.</div>
+              </div>
+              {usesPrivateVault && (
+                <div className="mt-4 rounded-2xl border border-primary-500/20 bg-primary-500/10 p-4 text-sm text-primary-200">
+                  Your vault entries live in this browser only. If you change devices or clear storage,
+                  you can still verify access again from the creator page, but the remembered list here
+                  will not follow you.
+                </div>
+              )}
+            </div>
+          </div>
+
           {verifyStep && (
             <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-xl flex items-center gap-3">
               <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -95,24 +124,17 @@ export default function SubscriptionsDashboardPage() {
             </div>
           )}
 
-          {/* Loading State */}
           {isLoading && (
             <div className="flex items-center justify-center py-20">
               <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-              <span className="ml-3 text-dark-400">Loading subscriptions...</span>
+              <span className="ml-3 text-dark-400">Loading your Private Vault...</span>
             </div>
           )}
 
-          {/* Empty State */}
           {!isLoading && subscriptions.length === 0 && (
-            <div className="text-center py-20">
+            <div className="text-center py-20 glass rounded-[2rem]">
               <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-dark-800 flex items-center justify-center">
-                <svg
-                  className="w-10 h-10 text-dark-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg className="w-10 h-10 text-dark-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -121,11 +143,11 @@ export default function SubscriptionsDashboardPage() {
                   />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">
-                No Subscriptions Yet
-              </h2>
-              <p className="text-dark-400 mb-6">
-                Subscribe to creators to unlock their exclusive content
+              <h2 className="text-xl font-semibold text-white mb-2">No private entries yet</h2>
+              <p className="text-dark-400 mb-6 max-w-xl mx-auto">
+                Subscribe to a creator or finish a relay flow and this browser will keep a private
+                record here. That record is a convenience layer only; access still gets re-verified
+                against the FHE contract whenever needed.
               </p>
               <Link
                 href="/explore"
@@ -136,7 +158,6 @@ export default function SubscriptionsDashboardPage() {
             </div>
           )}
 
-          {/* Subscriptions List */}
           {!isLoading && subscriptions.length > 0 && (
             <div className="space-y-4">
               {subscriptions.map((subscription) => (
@@ -150,35 +171,6 @@ export default function SubscriptionsDashboardPage() {
               ))}
             </div>
           )}
-
-          {/* Privacy Notice */}
-          <div className="mt-8 p-4 bg-primary-500/10 border border-primary-500/30 rounded-xl">
-            <div className="flex items-start gap-3">
-              <svg
-                className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              <div>
-                <h4 className="text-primary-400 font-semibold">
-                  Privacy-First Access Verification
-                </h4>
-                <p className="text-dark-300 text-sm mt-1">
-                  Your subscription status is encrypted on-chain. When you click
-                  &quot;Verify Access&quot;, the FHE coprocessor decrypts your status for
-                  your eyes only. The creator cannot see who their subscribers are.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
